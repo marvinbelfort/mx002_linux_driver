@@ -1,0 +1,2 @@
+#!/bin/bash
+lsusb -v -d 08f2:6811 
