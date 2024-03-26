@@ -42,12 +42,23 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut buf = [0u8; 64];
     while !term.load(Ordering::Relaxed) {
+        // println!("---");
         match device_handler.read_interrupt(endpoint_address, &mut buf, Duration::from_secs(3)) {
             Ok(bytes_read) => {
-                println!("Bytes lidos: {}", bytes_read);
-                println!("Dados: {:?}", &buf[..bytes_read]);
+                // println!("Dados: {:?}", &buf[..bytes_read]);
+                let mut counter = 0;
+                print!("\r\r\r\r");
+                for byte in &buf[..bytes_read]{
+                    print!("{:02x} ", byte);
+                    counter += 1;
+                    if counter == 16 {
+                        println!("");
+                        counter = 0;
+                    }
+                }
             }
-            Err(e) => println!("Erro ao ler do endpoint: {:?}", e),
+            // Err(e) => println!("Erro ao ler do endpoint: {:?}", e),
+            Err(_e) => (),
         }
     }
 
@@ -75,7 +86,7 @@ fn is_target_device(device: &Device<GlobalContext>) -> bool {
 }
 
 fn get_target_device() -> Result<Device<GlobalContext>, RusbError> {
-    match devices()?.iter().find(|device| is_target_device(device)) {
+    match devices()?.iter().find(is_target_device) {
         Some(device) => Ok(device),
         None => Err(RusbError::NoDevice),
     }
