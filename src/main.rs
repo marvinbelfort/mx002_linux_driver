@@ -42,12 +42,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut buf = [0u8; 64];
     while !term.load(Ordering::Relaxed) {
-        // println!("---");
         match device_handler.read_interrupt(endpoint_address, &mut buf, Duration::from_secs(3)) {
             Ok(bytes_read) => {
-                // println!("Dados: {:?}", &buf[..bytes_read]);
                 let mut counter = 0;
-                print!("\r\r\r\r");
                 for byte in &buf[..bytes_read]{
                     print!("{:02x} ", byte);
                     counter += 1;
