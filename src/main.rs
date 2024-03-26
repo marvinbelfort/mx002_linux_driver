@@ -1,5 +1,5 @@
 use rusb::{
-    devices, ConfigDescriptor, Device, DeviceHandle, Error as RusbError, GlobalContext, Interface,
+    devices, ConfigDescriptor, Device, DeviceHandle, Error as RusbError, GlobalContext,
     InterfaceDescriptor, TransferType,
 };
 use signal_hook::consts::signal::*;
@@ -17,7 +17,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let configurations = get_configurations(&device);
     let interface_descriptors = get_interface_descriptors(&configurations);
 
-    print!("Opening device\n");
     let mut device_handler = device.open()?;
 
     device_handler.set_auto_detach_kernel_driver(true)?;
@@ -43,9 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut buf = [0u8; 64];
     while !term.load(Ordering::Relaxed) {
-        let result =
-            device_handler.read_interrupt(endpoint_address, &mut buf, Duration::from_secs(3));
-        match result {
+        match device_handler.read_interrupt(endpoint_address, &mut buf, Duration::from_secs(3)) {
             Ok(bytes_read) => {
                 println!("Bytes lidos: {}", bytes_read);
                 println!("Dados: {:?}", &buf[..bytes_read]);
