@@ -75,7 +75,7 @@ fn is_target_device(device: &Device<GlobalContext>) -> bool {
 }
 
 fn get_target_device() -> Result<Device<GlobalContext>, RusbError> {
-    match devices()?.iter().find(|device| is_target_device(&device)) {
+    match devices()?.iter().find(|device| is_target_device(device)) {
         Some(device) => Ok(device),
         None => Err(RusbError::NoDevice),
     }
