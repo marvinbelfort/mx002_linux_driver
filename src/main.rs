@@ -39,47 +39,50 @@ fn main() -> Result<(), Box<dyn Error>> {
     signal_flag::register(SIGTERM, Arc::clone(&term))?;
     signal_flag::register(SIGQUIT, Arc::clone(&term))?;
 
-    let mut buf = [0u8; 64];
+    let mut buf = vec![0u8; 64];
     while !term.load(Ordering::Relaxed) {
         match device_handler.read_interrupt(endpoint_address, &mut buf, Duration::from_secs(3)) {
             Ok(bytes_read) => {
-                print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
-                println!("");
-                let mut counter = 0;
-                let mut position = 0;
-                for byte in &buf[..bytes_read]{
-                    if [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14].contains(&position){
-                        print!("--- ");
-                    } else {
-                        print!("{:03} ", byte);
-                    }
-                    counter += 1;
-                    if counter == 16 {
-                        println!("");
-                        counter = 0;
-                    }
-                    position += 1;
-                }
-                println!("---");
-                println!("[01]: {:08} Axis X most" , &buf[01]);
-                println!("[02]: {:08} Axis X last" , &buf[02]);
-                println!("[03]: {:08} Axis Y most" , &buf[03]);
-                println!("[13]: {:08} Axis Y most" , &buf[13]);
-                println!("[04]: {:08} Axis Y last" , &buf[04]);
-                println!("[14]: {:08} Axis Y last" , &buf[14]);
-                println!("[05]: {:08} Pen Pressure most" , &buf[05]);
-                println!("[06]: {:08} Pen Pressure last" , &buf[06]);
-                println!("[09]: {:08b} Pen Btns", &buf[09]);
-                println!("[10]: {:08b} Proximity", &buf[10]);
-                println!("[11]: {:08b} Btns", &buf[11]);
-                println!("[12]: {:08b} Btns", &buf[12]);
+                debug_buffer(&buf[..bytes_read]);
             }
-            // Err(e) => println!("Erro ao ler do endpoint: {:?}", e),
             Err(_e) => (),
         }
     }
 
     Ok(())
+}
+
+fn debug_buffer(buffer: &[u8]) -> () {
+    print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+    println!("");
+    let mut counter = 0;
+    let mut position = 0;
+    for byte in buffer {
+        if [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14].contains(&position) {
+            print!("--- ");
+        } else {
+            print!("{:03} ", byte);
+        }
+        counter += 1;
+        if counter == 16 {
+            println!("");
+            counter = 0;
+        }
+        position += 1;
+    }
+    println!("---");
+    println!("[01]: {:08} Axis X most", &buffer[01]);
+    println!("[02]: {:08} Axis X last", &buffer[02]);
+    println!("[03]: {:08} Axis Y most", &buffer[03]);
+    println!("[13]: {:08} Axis Y most", &buffer[13]);
+    println!("[04]: {:08} Axis Y last", &buffer[04]);
+    println!("[14]: {:08} Axis Y last", &buffer[14]);
+    println!("[05]: {:08} Pen Pressure most", &buffer[05]);
+    println!("[06]: {:08} Pen Pressure last", &buffer[06]);
+    println!("[09]: {:08b} Pen Btns", &buffer[09]);
+    println!("[10]: {:08b} Pen/Table Proximity", &buffer[10]);
+    println!("[11]: {:08b} Btns", &buffer[11]);
+    println!("[12]: {:08b} Btns", &buffer[12]);
 }
 
 fn set_report(device_handler: &mut DeviceHandle<GlobalContext>) -> Result<(), RusbError> {

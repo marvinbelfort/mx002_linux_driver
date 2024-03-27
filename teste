@@ -1,0 +1,17 @@
+como posso criar esse comportamento em rust:
+
+```
+let mut old = vec![0u8;4];
+let mut new = vec![0u8;4];
+
+fn read_new(n: u8) -> (){
+    // old now "points" to new current vec
+    // new now is a new vec![n; 4];
+}
+
+```
+
+Example
+
+let mut old = vec![0;4]; old contains [0,0,0,0]
+let mut new = vec![1;4]; new contains [1,1,1,1]

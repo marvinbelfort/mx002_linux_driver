@@ -1,0 +1,13 @@
+
+println!("[01]: {:08} Axis X most" , &buf[01]);
+println!("[02]: {:08} Axis X last" , &buf[02]);
+println!("[03]: {:08} Axis Y most" , &buf[03]);
+println!("[13]: {:08} Axis Y most" , &buf[13]);
+println!("[04]: {:08} Axis Y last" , &buf[04]);
+println!("[14]: {:08} Axis Y last" , &buf[14]);
+println!("[05]: {:08} Pen Pressure most" , &buf[05]);
+println!("[06]: {:08} Pen Pressure last" , &buf[06]);
+println!("[09]: {:08b} Pen Btns", &buf[09]);
+println!("[10]: {:08b} Proximity", &buf[10]);
+println!("[11]: {:08b} Btns", &buf[11]);
+println!("[12]: {:08b} Btns", &buf[12]);
