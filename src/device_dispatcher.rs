@@ -1,6 +1,11 @@
-use evdev::{uinput::VirtualDeviceBuilder, Key};
-use std::collections::HashMap;
+use evdev::{
+    uinput::{VirtualDevice, VirtualDeviceBuilder},
+    AbsInfo, AbsoluteAxisType, AttributeSet, EventType, InputEvent, InputEventKind, Key,
+    UinputAbsSetup,
+};
+use std::{collections::HashMap, error::Error, fmt::Error as Fmterror};
 
+#[derive(Copy, Clone)]
 enum PressState {
     Pressed = 0,
     Release = 1,
@@ -12,11 +17,18 @@ pub struct PhysicalButton {
     state: PressState,
 }
 
+impl PhysicalButton {
+    fn input_event(&self, code: u16) -> InputEvent {
+        InputEvent::new(EventType::KEY, code, self.state as i32)
+    }
+}
+
 pub struct DeviceDispatcher {
     tablet_last_buttons: u16,
     pen_last_buttons: u8,
     tablet_id_to_key_map: HashMap<u8, Key>,
     pen_id_to_key_map: HashMap<u8, Key>,
+    pen_virtual: VirtualDevice,
 }
 
 impl DeviceDispatcher {
@@ -47,10 +59,7 @@ impl DeviceDispatcher {
             Key::KEY_RIGHTBRACE,
         ];
 
-        let default_pen_keys: Vec<Key> = vec![
-            Key::BTN_STYLUS,
-            Key::BTN_STYLUS2,
-        ];
+        let default_pen_keys: Vec<Key> = vec![Key::BTN_STYLUS, Key::BTN_STYLUS2];
 
         let pen_buttons_ids: Vec<u8> = vec![4, 6];
 
@@ -61,7 +70,11 @@ impl DeviceDispatcher {
                 .into_iter()
                 .zip(default_tablet_keys.into_iter())
                 .collect(),
-            pen_id_to_key_map: pen_buttons_ids.into_iter().zip(default_pen_keys.into_iter()).collect(),
+            pen_id_to_key_map: pen_buttons_ids
+                .into_iter()
+                .zip(default_pen_keys.clone().into_iter()) //FIX: verificar esse clone()
+                .collect(),
+            pen_virtual: Self::pen_builder(&default_pen_keys).expect("Error creating Virtual Pen"),
         }
     }
 
@@ -70,7 +83,6 @@ impl DeviceDispatcher {
             buffer[Self::TABLET_BUTTONS_HIGH],
             buffer[Self::TABLET_BUTTONS_LOW],
         );
-
         let tablet_buttons_with_events = self.binary_flags_to_tablet_buttons(binary_button_flags);
         self.tablet_last_buttons = binary_button_flags;
 
@@ -78,11 +90,43 @@ impl DeviceDispatcher {
         let pen_buttons_with_events = self.pen_button_data_to_pen_buttons(pen_button_data);
         self.pen_last_buttons = pen_button_data;
 
+        if let Some(pen_button) = pen_buttons_with_events {
+            self.pen_virtual.emit(&[pen_button.input_event(
+                self.pen_id_to_key_map
+                    .get(&pen_button.id)
+                    .expect("Incorrect Mapping")
+                    .code(),
+            )]);
+        }
+
         // Mapeia botões pressionados para KEY_Events
         // Calcula boundaries e Emite X, Y
         // Calcula e emite Pen Pressure
     }
 
+    fn pen_builder(keys: &[Key]) -> Result<VirtualDevice, std::io::Error> {
+        let abs_x_setup =
+            UinputAbsSetup::new(AbsoluteAxisType::ABS_X, AbsInfo::new(0, 0, 4096, 0, 0, 1));
+        let abs_y_setup =
+            UinputAbsSetup::new(AbsoluteAxisType::ABS_Y, AbsInfo::new(0, 0, 4096, 0, 0, 1));
+        let abs_pressure_setup = UinputAbsSetup::new(
+            AbsoluteAxisType::ABS_PRESSURE,
+            AbsInfo::new(0, 0, 1024, 0, 0, 1),
+        );
+
+        let mut key_set = AttributeSet::<Key>::new();
+        for key in keys {
+            key_set.insert(*key);
+        }
+
+        VirtualDeviceBuilder::new()?
+            .name("virtual_pen")
+            .with_absolute_axis(&abs_x_setup)?
+            .with_absolute_axis(&abs_y_setup)?
+            .with_absolute_axis(&abs_pressure_setup)?
+            .with_keys(&key_set)?
+            .build()
+    }
     fn button_flags(high: u8, low: u8) -> u16 {
         ((high | 0xcc) as u16) << 8 | low as u16
     }
