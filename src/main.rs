@@ -1,5 +1,3 @@
-#![allow(dead_code, unused)]
-
 mod device_dispatcher;
 
 use device_dispatcher::{DeviceDispatcher, RawDataReader};
