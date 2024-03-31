@@ -2,11 +2,11 @@
 
 mod device_dispatcher;
 
+use device_dispatcher::{DeviceDispatcher, RawDataReader};
 use rusb::{
     devices, ConfigDescriptor, Device, DeviceHandle, Error as RusbError, GlobalContext,
     InterfaceDescriptor, TransferType,
 };
-use device_dispatcher::DeviceDispatcher;
 use signal_hook::consts::signal::*;
 use signal_hook::flag as signal_flag;
 use std::error::Error;
@@ -15,10 +15,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{u16, u8};
 
-
 const VID: u16 = 0x08f2;
 const PID: u16 = 0x6811;
-
 
 fn main() -> Result<(), Box<dyn Error>> {
     let device = get_target_device()?;
@@ -47,13 +45,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     signal_flag::register(SIGTERM, Arc::clone(&term))?;
     signal_flag::register(SIGQUIT, Arc::clone(&term))?;
 
+    let mut data_reader = RawDataReader::new();
     let mut device_dispatcher = DeviceDispatcher::new();
 
     let mut buf = vec![0u8; 64];
     while !term.load(Ordering::Relaxed) {
-        match device_handler.read_interrupt(endpoint_address, &mut buf, Duration::from_secs(3)) {
+        match device_handler.read_interrupt(endpoint_address, &mut data_reader.data, Duration::from_secs(3)) {
             Ok(bytes_read) => {
-                device_dispatcher.dispatch(&buf[..bytes_read]);
+                device_dispatcher.dispatch(&data_reader);
             }
             Err(_e) => (),
         }

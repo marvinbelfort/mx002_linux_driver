@@ -3,23 +3,58 @@ use evdev::{
     AbsInfo, AbsoluteAxisType, AttributeSet, EventType, InputEvent, InputEventKind, Key,
     UinputAbsSetup,
 };
-use std::{collections::HashMap, error::Error, fmt::Error as Fmterror};
+use std::{collections::HashMap, error::Error, fmt::Error as Fmterror, u16};
 
-#[derive(Copy, Clone)]
-enum PressState {
-    Pressed = 0,
-    Release = 1,
-    Hold = 2,
+
+pub struct RawDataReader {
+    pub data: Vec<u8>,
 }
 
-pub struct PhysicalButton {
-    id: u8,
-    state: PressState,
-}
+impl RawDataReader {
+    const X_AXIS_HIGH: usize = 1;
+    const X_AXIS_LOW: usize = 2;
+    const Y_AXIS_HIGH: usize = 3;
+    const Y_AXIS_LOW: usize = 4;
+    const PRESSURE_HIGH: usize = 5;
+    const PRESSURE_LOW: usize = 6;
+    const PEN_BUTTONS: usize = 9;
+    const TABLET_BUTTONS_HIGH: usize = 12;
+    const TABLET_BUTTONS_LOW: usize = 11;
 
-impl PhysicalButton {
-    fn input_event(&self, code: u16) -> InputEvent {
-        InputEvent::new(EventType::KEY, code, self.state as i32)
+    pub fn new() -> Self {
+        RawDataReader {
+            data: vec![0u8; 64],
+        }
+    }
+
+    fn u16_from_2_u8(&self, high: u8, low: u8) -> u16 {
+        ((high | 0xcc) as u16) << 8 | low as u16
+    }
+
+    fn x_axis(&self) -> u16 {
+        self.u16_from_2_u8(self.data[Self::X_AXIS_HIGH], self.data[Self::X_AXIS_LOW])
+    }
+
+    fn y_axis(&self) -> u16 {
+        self.u16_from_2_u8(self.data[Self::Y_AXIS_HIGH], self.data[Self::Y_AXIS_LOW])
+    }
+
+    fn pressure(&self) -> u16 {
+        self.u16_from_2_u8(
+            self.data[Self::PRESSURE_HIGH],
+            self.data[Self::PRESSURE_LOW],
+        )
+    }
+
+    fn tablet_flags(&self) -> u16 {
+        self.u16_from_2_u8(
+            self.data[Self::TABLET_BUTTONS_HIGH],
+            self.data[Self::TABLET_BUTTONS_LOW],
+        )
+    }
+
+    fn pen_buttons(&self) -> u8 {
+        self.data[Self::PEN_BUTTONS]
     }
 }
 
@@ -28,20 +63,10 @@ pub struct DeviceDispatcher {
     pen_last_buttons: u8,
     tablet_id_to_key_map: HashMap<u8, Key>,
     pen_id_to_key_map: HashMap<u8, Key>,
-    pen_virtual: VirtualDevice,
+    virtual_device: VirtualDevice,
 }
 
 impl DeviceDispatcher {
-    const X_AXIS_HIGH: usize = 1;
-    const X_AXIS_LOW: usize = 2;
-    const Y_AXIS_HIGH: usize = 3;
-    const Y_AXIS_LOW: usize = 4;
-    const Y_PRESSURE_HIGH: usize = 5;
-    const Y_PRESSURE_LOW: usize = 6;
-    const PEN_BUTTONS: usize = 9;
-    const TABLET_BUTTONS_HIGH: usize = 12;
-    const TABLET_BUTTONS_LOW: usize = 11;
-
     pub fn new() -> Self {
         let tablet_buttons_ids: Vec<u8> = (0..14).filter(|i| ![10, 11].contains(i)).collect();
         let default_tablet_keys: Vec<Key> = vec![
@@ -68,43 +93,38 @@ impl DeviceDispatcher {
             pen_last_buttons: 0,
             tablet_id_to_key_map: tablet_buttons_ids
                 .into_iter()
-                .zip(default_tablet_keys.into_iter())
+                .zip(default_tablet_keys.clone().into_iter())
                 .collect(),
             pen_id_to_key_map: pen_buttons_ids
                 .into_iter()
-                .zip(default_pen_keys.clone().into_iter()) //FIX: verificar esse clone()
+                .zip(default_pen_keys.clone().into_iter()) //WARNING: verificar esse clone()
                 .collect(),
-            pen_virtual: Self::pen_builder(&default_pen_keys).expect("Error creating Virtual Pen"),
+            virtual_device: Self::virtual_device_builder(&default_pen_keys, &default_tablet_keys)
+                .expect("Error creating Virtual Pen"),
         }
     }
 
-    pub fn dispatch(&mut self, buffer: &[u8]) -> () {
-        let binary_button_flags = Self::button_flags(
-            buffer[Self::TABLET_BUTTONS_HIGH],
-            buffer[Self::TABLET_BUTTONS_LOW],
-        );
-        let tablet_buttons_with_events = self.binary_flags_to_tablet_buttons(binary_button_flags);
-        self.tablet_last_buttons = binary_button_flags;
-
-        let pen_button_data = buffer[Self::PEN_BUTTONS];
-        let pen_buttons_with_events = self.pen_button_data_to_pen_buttons(pen_button_data);
-        self.pen_last_buttons = pen_button_data;
-
-        if let Some(pen_button) = pen_buttons_with_events {
-            self.pen_virtual.emit(&[pen_button.input_event(
-                self.pen_id_to_key_map
-                    .get(&pen_button.id)
-                    .expect("Incorrect Mapping")
-                    .code(),
-            )]);
-        }
-
-        // Mapeia botões pressionados para KEY_Events
-        // Calcula boundaries e Emite X, Y
-        // Calcula e emite Pen Pressure
+    pub fn dispatch(&mut self, raw_data: &RawDataReader) -> () {
+        self.emit_tablet_events(raw_data);
+        self.emit_pen_events(raw_data);
     }
 
-    fn pen_builder(keys: &[Key]) -> Result<VirtualDevice, std::io::Error> {
+    fn emit_tablet_events(& mut self, raw_data: &RawDataReader) -> () {
+        let raw_button_as_flags = raw_data.tablet_flags();
+        self.binary_flags_to_tablet_key_events(raw_button_as_flags);
+        self.tablet_last_buttons = raw_button_as_flags;
+    }
+
+    fn emit_pen_events(& mut self, raw_data: &RawDataReader) -> () {
+        let raw_pen_buttons = raw_data.pen_buttons();
+        self.raw_pen_buttons_to_pen_key_events(raw_pen_buttons);
+        self.pen_last_buttons = raw_pen_buttons;
+    }
+
+    fn virtual_device_builder(
+        pen_keys: &[Key],
+        tablet_keys: &[Key],
+    ) -> Result<VirtualDevice, std::io::Error> {
         let abs_x_setup =
             UinputAbsSetup::new(AbsoluteAxisType::ABS_X, AbsInfo::new(0, 0, 4096, 0, 0, 1));
         let abs_y_setup =
@@ -115,57 +135,62 @@ impl DeviceDispatcher {
         );
 
         let mut key_set = AttributeSet::<Key>::new();
-        for key in keys {
-            key_set.insert(*key);
+        for pen_key in pen_keys {
+            key_set.insert(*pen_key);
+        }
+        for tablet_keys in tablet_keys {
+            key_set.insert(*tablet_keys);
         }
 
         VirtualDeviceBuilder::new()?
-            .name("virtual_pen")
+            .name("virtual_tablet")
             .with_absolute_axis(&abs_x_setup)?
             .with_absolute_axis(&abs_y_setup)?
             .with_absolute_axis(&abs_pressure_setup)?
             .with_keys(&key_set)?
             .build()
     }
-    fn button_flags(high: u8, low: u8) -> u16 {
-        ((high | 0xcc) as u16) << 8 | low as u16
-    }
 
-    fn binary_flags_to_tablet_buttons(&self, binary_button_flags: u16) -> Vec<PhysicalButton> {
-        (0..14)
-            .filter(|i| ![10, 11].contains(i))
-            .filter_map(|i| self.tablet_button_from_bits(i, binary_button_flags))
-            .collect()
-    }
-
-    pub fn tablet_button_from_bits(
-        &self,
-        i: u8,
-        binary_button_flags: u16,
-    ) -> Option<PhysicalButton> {
+    pub fn emit_tablet_event(& mut self, i: u8, raw_button_as_flags: u16) -> () {
         let mask = 1 << i;
-        let is_pressed = (binary_button_flags & mask) == 0;
+        let is_pressed = (raw_button_as_flags & mask) == 0;
         let was_pressed = (self.tablet_last_buttons & mask) == 0;
 
         match (was_pressed, is_pressed) {
-            (true, true) => Some(PressState::Hold),
-            (false, true) => Some(PressState::Pressed),
-            (true, false) => Some(PressState::Release),
+            (false, true) => Some(0),
+            (true, false) => Some(1),
+            (true, true) => Some(2),
             (false, false) => None,
         }
-        .map(|state| PhysicalButton { id: i, state })
+        .map(|state| {
+            let emit_key = self
+                .tablet_id_to_key_map
+                .get(&i)
+                .expect("Error mapping key")
+                .code();
+            self.virtual_device
+                .emit(&[InputEvent::new(EventType::KEY, emit_key, state)])
+                .expect("Error Emmiting");
+        });
     }
 
-    fn pen_button_data_to_pen_buttons(&self, pen_buttons: u8) -> Option<PhysicalButton> {
+    fn binary_flags_to_tablet_key_events(& mut self, raw_button_as_flags: u16) -> () {
+        (0..14)
+            .filter(|i| ![10, 11].contains(i))
+            .map(|i| self.emit_tablet_event(i, raw_button_as_flags));
+    }
+
+    fn raw_pen_buttons_to_pen_key_events(& mut self, pen_buttons: u8) -> () {
         match (self.pen_last_buttons, pen_buttons) {
-            (2, x) if x == 6 || x == 4 => Some(PressState::Pressed),
-            (x, 2) if x == 6 || x == 4 => Some(PressState::Release),
-            (x, y) if x == y => Some(PressState::Hold),
+            (2, x) if x == 6 || x == 4 => Some(0),
+            (x, 2) if x == 6 || x == 4 => Some(1),
+            (x, y) if x == y => Some(2),
             _ => None,
         }
-        .map(|state| PhysicalButton {
-            id: pen_buttons,
-            state,
-        })
+        .map(|state| {
+            let emit_key = self.pen_id_to_key_map.get(&pen_buttons).expect("").code();
+            self.virtual_device
+                .emit(&[InputEvent::new(EventType::KEY, emit_key, state)])
+        });
     }
 }
