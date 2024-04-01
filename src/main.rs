@@ -46,10 +46,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut data_reader = RawDataReader::new();
     let mut device_dispatcher = DeviceDispatcher::new();
 
-    let mut buf = vec![0u8; 64];
+    let _buf = vec![0u8; 64];
     while !term.load(Ordering::Relaxed) {
         match device_handler.read_interrupt(endpoint_address, &mut data_reader.data, Duration::from_secs(3)) {
-            Ok(bytes_read) => {
+            Ok(_bytes_read) => {
                 device_dispatcher.dispatch(&data_reader);
             }
             Err(_e) => (),
