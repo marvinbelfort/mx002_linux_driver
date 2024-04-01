@@ -85,7 +85,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "mx002"
+name = "mx002-driver"
+version = "0.1.0"
+dependencies = [
+ "evdev",
+ "mx002_lib",
+ "rusb",
+ "signal-hook",
+]
+
+[[package]]
+name = "mx002-probe"
+version = "0.1.0"
+dependencies = [
+ "evdev",
+ "rusb",
+ "signal-hook",
+]
+
+[[package]]
+name = "mx002_lib"
 version = "0.1.0"
 dependencies = [
  "evdev",
