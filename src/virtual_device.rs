@@ -29,19 +29,19 @@ impl RawDataReader {
         (high as u16) << 8 | low as u16
     }
 
-    fn x_axis(&self) -> u16 {
-        self.u16_from_2_u8(self.data[Self::X_AXIS_HIGH], self.data[Self::X_AXIS_LOW])
+    fn x_axis(&self) -> i32 {
+        self.u16_from_2_u8(self.data[Self::X_AXIS_HIGH], self.data[Self::X_AXIS_LOW]) as i32
     }
 
-    fn y_axis(&self) -> u16 {
-        self.u16_from_2_u8(self.data[Self::Y_AXIS_HIGH], self.data[Self::Y_AXIS_LOW])
+    fn y_axis(&self) -> i32 {
+        self.u16_from_2_u8(self.data[Self::Y_AXIS_HIGH], self.data[Self::Y_AXIS_LOW]) as i32
     }
 
-    fn pressure(&self) -> u16 {
+    fn pressure(&self) -> i32 {
         self.u16_from_2_u8(
             self.data[Self::PRESSURE_HIGH],
             self.data[Self::PRESSURE_LOW],
-        )
+        ) as i32
     }
 
     fn tablet_flags(&self) -> u16 {
@@ -120,7 +120,7 @@ impl DeviceDispatcher {
         self.raw_pen_abs_to_pen_abs_events(
             raw_data.x_axis(),
             raw_data.y_axis(),
-            1746 - (raw_data.pressure() as i32),
+            1746 - raw_data.pressure(),
         );
     }
 
@@ -159,37 +159,35 @@ impl DeviceDispatcher {
         let is_pressed = (raw_button_as_flags & mask) == 0;
         let was_pressed = (self.tablet_last_buttons & mask) == 0;
 
-        match (was_pressed, is_pressed) {
+        if let Some(state) = match (was_pressed, is_pressed) {
             (false, true) => Some(0),
             (true, false) => Some(1),
             (true, true) => Some(2),
             (false, false) => None,
-        }
-        .map(|state| {
+        } {
             let emit_key = self
                 .tablet_id_to_key_map
                 .get(&i)
-                .expect("Error mapping key")
+                .expect("Error mapping tablet keys")
                 .code();
             self.emit_and_log(EventType::KEY, emit_key, state);
-        });
+        };
     }
 
     fn raw_pen_buttons_to_pen_key_events(&mut self, pen_buttons: u8) {
-        match (self.pen_last_buttons, pen_buttons) {
+        if let Some((state, id)) = match (self.pen_last_buttons, pen_buttons) {
             (2, x) if x == 6 || x == 4 => Some((0, x)),
             (x, 2) if x == 6 || x == 4 => Some((1, x)),
             (x, y) if x != 2 && x == y => Some((2, x)),
             _ => None,
-        }
-        .map(|(state, id)| {
+        } {
             let emit_key = self
                 .pen_id_to_key_map
                 .get(&id)
-                .expect("Mapping Pen Id to key map")
+                .expect("Error mapping pen keys")
                 .code();
             self.emit_and_log(EventType::KEY, emit_key, state);
-        });
+        };
     }
 
     fn emit_and_log(&mut self, event_type: EventType, code: u16, state: i32) {
@@ -204,21 +202,13 @@ impl DeviceDispatcher {
             .for_each(|i| self.emit_tablet_event(i, raw_button_as_flags));
     }
 
-    fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: u16, y_axis: u16, pressure: i32) {
-        self.emit_and_log(
-            EventType::ABSOLUTE,
-            AbsoluteAxisType::ABS_X.0,
-            x_axis as i32,
-        );
-        self.emit_and_log(
-            EventType::ABSOLUTE,
-            AbsoluteAxisType::ABS_Y.0,
-            y_axis as i32,
-        );
+    fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: i32, y_axis: i32, pressure: i32) {
+        self.emit_and_log(EventType::ABSOLUTE, AbsoluteAxisType::ABS_X.0, x_axis);
+        self.emit_and_log(EventType::ABSOLUTE, AbsoluteAxisType::ABS_Y.0, y_axis);
         self.emit_and_log(
             EventType::ABSOLUTE,
             AbsoluteAxisType::ABS_PRESSURE.0,
-            pressure as i32,
+            pressure,
         );
     }
 }
