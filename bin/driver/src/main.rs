@@ -1,39 +1,41 @@
 use signal_hook::consts::signal::*;
-use signal_hook::flag as signal_flag;
-use std::error::Error;
+use signal_hook::flag::register;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::u16;
 
-use mx002_lib::virtual_device::{DeviceDispatcher, RawDataReader};
 use mx002_lib::physical_device::PhysicalDevice;
+use mx002_lib::virtual_device::{DeviceDispatcher, RawDataReader};
 
 const VID: u16 = 0x08f2;
 const PID: u16 = 0x6811;
 
-fn main() -> Result<(), Box<dyn Error>> {
-
+fn main() {
     let mut physical_device = PhysicalDevice::new(VID, PID);
-    physical_device.init();
-    physical_device.set_report().expect("Error setting report");
-
-    let term = Arc::new(AtomicBool::new(false));
-    signal_flag::register(SIGINT, Arc::clone(&term))?;
-    signal_flag::register(SIGTERM, Arc::clone(&term))?;
-    signal_flag::register(SIGQUIT, Arc::clone(&term))?;
+    physical_device.init().set_full_mode();
 
     let mut data_reader = RawDataReader::new();
     let mut device_dispatcher = DeviceDispatcher::new();
 
-    while !term.load(Ordering::Relaxed) {
-        match physical_device.read( &mut data_reader.data) {
-            Ok(_bytes_read) => {
+    main_loop({
+        || match physical_device.read_device_responses(&mut data_reader.data) {
+            Ok(_) => {
                 device_dispatcher.dispatch(&data_reader);
             }
-            Err(_e) => (),
+            Err(_e) => println!("Error reading buffer. Skipping."),
         }
-    }
-
-    Ok(())
+    });
 }
 
+fn main_loop(mut f: impl FnMut() -> ()) {
+    let signals: Vec<i32> = vec![SIGINT, SIGTERM, SIGQUIT];
+    let flag = Arc::new(AtomicBool::new(false));
+
+    for signal in signals {
+        register(signal, Arc::clone(&flag)).expect("Error registering interrupt signals.");
+    }
+
+    while !flag.load(Ordering::Relaxed) {
+        f();
+    }
+}

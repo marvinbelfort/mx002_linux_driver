@@ -6,14 +6,13 @@ use rusb::{
 use std::time::Duration;
 
 pub struct PhysicalDevice {
-    endpoint_address: u8,
     device: Device<GlobalContext>,
     device_handle: DeviceHandle<GlobalContext>,
+    endpoint_address: u8,
 }
 
 impl PhysicalDevice {
     pub fn new(vid: u16, pid: u16) -> Self {
-
         let device = Self::get_target_device(vid, pid).expect("Error finding device");
 
         PhysicalDevice {
@@ -23,15 +22,18 @@ impl PhysicalDevice {
         }
     }
 
-    pub fn init(&mut self) {
-        self.device_handle.set_auto_detach_kernel_driver(true).expect("Error detaching old driver");
+    pub fn init(&mut self) -> &mut Self {
+        self.device_handle
+            .set_auto_detach_kernel_driver(true)
+            .expect("Error detaching old driver");
 
         let configurations = Self::get_configurations(&self.device);
         let interface_descriptors = Self::get_hid_interface_descriptors(&configurations);
 
         for interface_descriptor in interface_descriptors {
             self.device_handle
-                .claim_interface(interface_descriptor.interface_number()).expect("Error claiming interface");
+                .claim_interface(interface_descriptor.interface_number())
+                .expect("Error claiming interface");
             for endpoint_descriptor in interface_descriptor.endpoint_descriptors() {
                 if endpoint_descriptor.transfer_type() == TransferType::Interrupt
                     && endpoint_descriptor.max_packet_size() == 64
@@ -40,21 +42,28 @@ impl PhysicalDevice {
                 }
             }
         }
-    }
-   
-    pub fn read(& self, buffer: &mut [u8]) -> Result<usize, RusbError> {
-        self.device_handle.read_interrupt(self.endpoint_address, buffer, Duration::from_secs(3)) 
+        self
     }
 
-    pub fn set_report(&mut self) -> Result<(), RusbError> {
-        const REPORTS: [[u8; 8]; 4] = [
-            [0x08, 0x04, 0x1d, 0x01, 0xff, 0xff, 0x06, 0x2e],
-            [0x08, 0x03, 0x00, 0xff, 0xf0, 0x00, 0xff, 0xf0],
-            [0x08, 0x06, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00],
-            [0x08, 0x03, 0x00, 0xff, 0xf0, 0x00, 0xff, 0xf0],
-        ];
+    pub fn reset(&mut self) {
+        self.device_handle.reset().expect("Erro reseting device.");
+    }
 
-        for report in REPORTS.iter() {
+    pub fn read_device_responses(&self, buffer: &mut [u8]) -> Result<usize, RusbError> {
+        self.device_handle
+            .read_interrupt(self.endpoint_address, buffer, Duration::from_secs(3))
+    }
+
+    pub fn set_full_mode(&mut self) -> &mut Self {
+        const REPORTS: [[u8; 8]; 1] = [[0x08, 0x03, 0x00, 0xff, 0xf0, 0x00, 0xff, 0xf0]];
+        let reports_as_slices: Vec<&[u8]> = REPORTS.iter().map(|r| &r[..]).collect();
+        self.set_report(&reports_as_slices)
+            .expect("Error sending report");
+        self
+    }
+
+    pub fn set_report(&mut self, reports: &[&[u8]]) -> Result<(), RusbError> {
+        for report in reports.iter() {
             self.device_handle.write_control(
                 0x21,
                 0x9,

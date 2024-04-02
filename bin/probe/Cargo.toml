@@ -9,5 +9,5 @@ edition = "2021"
 evdev = "0.12.1"
 rusb = "0.9.3"
 signal-hook = "0.3.17"
-
+mx002_lib = {path = "../../lib/"}
 

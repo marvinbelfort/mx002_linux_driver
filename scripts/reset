@@ -1,0 +1,5 @@
+#!/bin/bash
+echo 0 | sudo tee sys/bus/usb/drivers/usb/1-8/authorized
+echo 1 | sudo tee sys/bus/usb/drivers/usb/1-8/authorized
+echo '1-8' | sudo tee unbind
+echo '1-8' | sudo tee bind

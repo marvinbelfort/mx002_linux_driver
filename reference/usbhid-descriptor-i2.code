@@ -1,0 +1,162 @@
+0x06, 0xA0, 0xFF,   /*  Usage Page (FFA0h),                             */
+0x09, 0x01,         /*  Usage (01h),                                    */
+0xA1, 0x01,         /*  Collection (Application),                       */
+0x85, 0x01,         /*      Report ID (1),                              */
+0x09, 0x02,         /*      Usage (02h),                                */
+0x15, 0x00,         /*      Logical Minimum (0),                        */
+0x25, 0xFF,         /*      Logical Maximum (-1),                       */
+0x75, 0x08,         /*      Report Size (8),                            */
+0x95, 0x07,         /*      Report Count (7),                           */
+0x81, 0x02,         /*      Input (Variable),                           */
+0x15, 0x00,         /*      Logical Minimum (0),                        */
+0x25, 0x01,         /*      Logical Maximum (1),                        */
+0x95, 0x40,         /*      Report Count (64),                          */
+0x75, 0x01,         /*      Report Size (1),                            */
+0x05, 0x08,         /*      Usage Page (LED),                           */
+0x19, 0x01,         /*      Usage Minimum (01h),                        */
+0x29, 0x40,         /*      Usage Maximum (40h),                        */
+0x91, 0x02,         /*      Output (Variable),                          */
+0x09, 0x00,         /*      Usage (00h),                                */
+0x15, 0x00,         /*      Logical Minimum (0),                        */
+0x26, 0xFF, 0x00,   /*      Logical Maximum (255),                      */
+0x75, 0x08,         /*      Report Size (8),                            */
+0x95, 0x07,         /*      Report Count (7),                           */
+0x85, 0x08,         /*      Report ID (8),                              */
+0xB1, 0x02,         /*      Feature (Variable),                         */
+0xC0,               /*  End Collection,                                 */
+0x05, 0x01,         /*  Usage Page (Desktop),                           */
+0x09, 0x06,         /*  Usage (Keyboard),                               */
+0xA1, 0x01,         /*  Collection (Application),                       */
+0x85, 0x02,         /*      Report ID (2),                              */
+0x05, 0x07,         /*      Usage Page (Keyboard),                      */
+0x19, 0xE0,         /*      Usage Minimum (KB Leftcontrol),             */
+0x29, 0xE7,         /*      Usage Maximum (KB Right GUI),               */
+0x15, 0x00,         /*      Logical Minimum (0),                        */
+0x25, 0x01,         /*      Logical Maximum (1),                        */
+0x75, 0x01,         /*      Report Size (1),                            */
+0x95, 0x08,         /*      Report Count (8),                           */
+0x81, 0x02,         /*      Input (Variable),                           */
+0x95, 0x01,         /*      Report Count (1),                           */
+0x75, 0x08,         /*      Report Size (8),                            */
+0x81, 0x01,         /*      Input (Constant),                           */
+0x95, 0x05,         /*      Report Count (5),                           */
+0x75, 0x01,         /*      Report Size (1),                            */
+0x05, 0x08,         /*      Usage Page (LED),                           */
+0x19, 0x01,         /*      Usage Minimum (01h),                        */
+0x29, 0x05,         /*      Usage Maximum (05h),                        */
+0x91, 0x02,         /*      Output (Variable),                          */
+0x95, 0x01,         /*      Report Count (1),                           */
+0x75, 0x03,         /*      Report Size (3),                            */
+0x91, 0x01,         /*      Output (Constant),                          */
+0x95, 0x05,         /*      Report Count (5),                           */
+0x75, 0x08,         /*      Report Size (8),                            */
+0x15, 0x00,         /*      Logical Minimum (0),                        */
+0x25, 0x65,         /*      Logical Maximum (101),                      */
+0x05, 0x07,         /*      Usage Page (Keyboard),                      */
+0x19, 0x00,         /*      Usage Minimum (None),                       */
+0x29, 0x65,         /*      Usage Maximum (KB Application),             */
+0x81, 0x00,         /*      Input,                                      */
+0xC0,               /*  End Collection,                                 */
+0x05, 0x0D,         /*  Usage Page (Digitizer),                         */
+0x09, 0x01,         /*  Usage (Digitizer),                              */
+0xA1, 0x01,         /*  Collection (Application),                       */
+0x85, 0x05,         /*      Report ID (5),                              */
+0x09, 0x20,         /*      Usage (Stylus),                             */
+0xA1, 0x00,         /*      Collection (Physical),                      */
+0x09, 0x42,         /*          Usage (Tip Switch),                     */
+0x09, 0x44,         /*          Usage (Barrel Switch),                  */
+0x09, 0x45,         /*          Usage (Eraser),                         */
+0x09, 0x3C,         /*          Usage (Invert),                         */
+0x15, 0x00,         /*          Logical Minimum (0),                    */
+0x25, 0x01,         /*          Logical Maximum (1),                    */
+0x75, 0x01,         /*          Report Size (1),                        */
+0x95, 0x04,         /*          Report Count (4),                       */
+0x81, 0x02,         /*          Input (Variable),                       */
+0x75, 0x01,         /*          Report Size (1),                        */
+0x95, 0x02,         /*          Report Count (2),                       */
+0x81, 0x01,         /*          Input (Constant),                       */
+0x09, 0x32,         /*          Usage (In Range),                       */
+0x75, 0x01,         /*          Report Size (1),                        */
+0x95, 0x01,         /*          Report Count (1),                       */
+0x81, 0x02,         /*          Input (Variable),                       */
+0x81, 0x01,         /*          Input (Constant),                       */
+0x05, 0x01,         /*          Usage Page (Desktop),                   */
+0x09, 0x30,         /*          Usage (X),                              */
+0x75, 0x10,         /*          Report Size (16),                       */
+0x95, 0x01,         /*          Report Count (1),                       */
+0xA4,               /*          Push,                                   */
+0x55, 0x0D,         /*          Unit Exponent (13),                     */
+0x65, 0x13,         /*          Unit (Inch),                            */
+0x35, 0x00,         /*          Physical Minimum (0),                   */
+0x46, 0x40, 0x1F,   /*          Physical Maximum (8000),                */
+0x26, 0x00, 0x10,   /*          Logical Maximum (4096),                 */
+0x81, 0x02,         /*          Input (Variable),                       */
+0x09, 0x31,         /*          Usage (Y),                              */
+0x46, 0xDC, 0x14,   /*          Physical Maximum (5340),                */
+0x26, 0x00, 0x10,   /*          Logical Maximum (4096),                 */
+0x81, 0x02,         /*          Input (Variable),                       */
+0xB4,               /*          Pop,                                    */
+0x05, 0x0D,         /*          Usage Page (Digitizer),                 */
+0x09, 0x30,         /*          Usage (Tip Pressure),                   */
+0x26, 0xFF, 0x07,   /*          Logical Maximum (2047),                 */
+0x46, 0xFF, 0x07,   /*          Physical Maximum (2047),                */
+0x55, 0x00,         /*          Unit Exponent (0),                      */
+0x66, 0x11, 0xE1,   /*          Unit (Centimeter * Gram * Seconds^-2),  */
+0x75, 0x10,         /*          Report Size (16),                       */
+0x81, 0x02,         /*          Input (Variable),                       */
+0xC0,               /*      End Collection,                             */
+0xC0,               /*  End Collection,                                 */
+0x05, 0x0C,         /*  Usage Page (Consumer),                          */
+0x09, 0x01,         /*  Usage (Consumer Control),                       */
+0xA1, 0x01,         /*  Collection (Application),                       */
+0x85, 0x04,         /*      Report ID (4),                              */
+0x19, 0x00,         /*      Usage Minimum (00h),                        */
+0x2A, 0x3C, 0x02,   /*      Usage Maximum (AC Format),                  */
+0x15, 0x00,         /*      Logical Minimum (0),                        */
+0x26, 0x3C, 0x02,   /*      Logical Maximum (572),                      */
+0x95, 0x01,         /*      Report Count (1),                           */
+0x75, 0x10,         /*      Report Size (16),                           */
+0x81, 0x00,         /*      Input,                                      */
+0xC0,               /*  End Collection,                                 */
+0x05, 0x0D,         /*  Usage Page (Digitizer),                         */
+0x09, 0x02,         /*  Usage (Pen),                                    */
+0xA1, 0x01,         /*  Collection (Application),                       */
+0x85, 0x07,         /*      Report ID (7),                              */
+0x09, 0x20,         /*      Usage (Stylus),                             */
+0xA1, 0x00,         /*      Collection (Physical),                      */
+0x09, 0x42,         /*          Usage (Tip Switch),                     */
+0x09, 0x44,         /*          Usage (Barrel Switch),                  */
+0x09, 0x45,         /*          Usage (Eraser),                         */
+0x09, 0x3C,         /*          Usage (Invert),                         */
+0x09, 0x43,         /*          Usage (Secondary Tip Switch),           */
+0x09, 0x44,         /*          Usage (Barrel Switch),                  */
+0x15, 0x00,         /*          Logical Minimum (0),                    */
+0x25, 0x01,         /*          Logical Maximum (1),                    */
+0x75, 0x01,         /*          Report Size (1),                        */
+0x95, 0x06,         /*          Report Count (6),                       */
+0x81, 0x02,         /*          Input (Variable),                       */
+0x09, 0x32,         /*          Usage (In Range),                       */
+0x75, 0x01,         /*          Report Size (1),                        */
+0x95, 0x01,         /*          Report Count (1),                       */
+0x81, 0x02,         /*          Input (Variable),                       */
+0x81, 0x03,         /*          Input (Constant, Variable),             */
+0x05, 0x01,         /*          Usage Page (Desktop),                   */
+0x09, 0x30,         /*          Usage (X),                              */
+0x09, 0x31,         /*          Usage (Y),                              */
+0x55, 0x0D,         /*          Unit Exponent (13),                     */
+0x65, 0x33,         /*          Unit (Inch^3),                          */
+0x26, 0x00, 0x10,   /*          Logical Maximum (4096),                 */
+0x35, 0x00,         /*          Physical Minimum (0),                   */
+0x46, 0x40, 0x1F,   /*          Physical Maximum (8000),                */
+0x75, 0x10,         /*          Report Size (16),                       */
+0x95, 0x02,         /*          Report Count (2),                       */
+0x81, 0x02,         /*          Input (Variable),                       */
+0x05, 0x0D,         /*          Usage Page (Digitizer),                 */
+0x09, 0x30,         /*          Usage (Tip Pressure),                   */
+0x46, 0xFF, 0x1F,   /*          Physical Maximum (8191),                */
+0x26, 0xFF, 0x07,   /*          Logical Maximum (2047),                 */
+0x75, 0x10,         /*          Report Size (16),                       */
+0x95, 0x01,         /*          Report Count (1),                       */
+0x81, 0x02,         /*          Input (Variable),                       */
+0xC0,               /*      End Collection,                             */
+0xC0                /*  End Collection                                  */

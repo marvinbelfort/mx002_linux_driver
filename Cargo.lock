@@ -99,6 +99,7 @@ name = "mx002-probe"
 version = "0.1.0"
 dependencies = [
  "evdev",
+ "mx002_lib",
  "rusb",
  "signal-hook",
 ]
