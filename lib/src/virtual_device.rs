@@ -62,6 +62,7 @@ pub struct DeviceDispatcher {
     map_tablet_button_id_to_emitted_key: HashMap<u8, Key>,
     map_pen_button_id_to_emitted_key: HashMap<u8, Key>,
     virtual_device: VirtualDevice,
+    was_touching: bool,
 }
 
 impl DeviceDispatcher {
@@ -101,6 +102,7 @@ impl DeviceDispatcher {
                 &default_tablet_emitted_keys,
             )
             .expect("Error creating Virtual Device"),
+            was_touching: false,
         }
     }
 
@@ -119,11 +121,21 @@ impl DeviceDispatcher {
         let raw_pen_buttons = raw_data.pen_buttons();
         self.raw_pen_buttons_to_pen_key_events(raw_pen_buttons);
         self.pen_last_raw_pressed_buttons = raw_pen_buttons;
+        let normalized_pressure = Self::normalize_pressure(raw_data.pressure());
         self.raw_pen_abs_to_pen_abs_events(
             raw_data.x_axis(),
             raw_data.y_axis(),
-            1746 - raw_data.pressure(),
+            normalized_pressure,
         );
+
+        self.pen_emit_touch(raw_data);
+    }
+
+    fn normalize_pressure(raw_pressure: i32) -> i32 {
+        match 1740 - raw_pressure {
+            x if x <= 0 => 0,
+            x => x,
+        }
     }
 
     fn virtual_device_builder(
@@ -147,6 +159,8 @@ impl DeviceDispatcher {
             key_set.insert(*key);
         }
 
+        key_set.insert(Key::BTN_TOOL_PEN);
+
         VirtualDeviceBuilder::new()?
             .name("virtual_tablet_and_stylus")
             .with_absolute_axis(&abs_x_setup)?
@@ -164,7 +178,7 @@ impl DeviceDispatcher {
         if let Some(state) = match (was_pressed, is_pressed) {
             (false, true) => Some(0), //Pressed
             (true, false) => Some(1), //Released
-            (true, true) => Some(2), //Hold: hardware does not support, will never emit.
+            (true, true) => Some(2),  //Hold: hardware does not support, will never emit.
             (false, false) => None,
         } {
             let emit_key = self
@@ -172,7 +186,7 @@ impl DeviceDispatcher {
                 .get(&i)
                 .expect("Error mapping tablet keys")
                 .code();
-            self.emit_and_log(EventType::KEY, emit_key, state);
+            self.emit(EventType::KEY, emit_key, state);
         };
     }
 
@@ -188,15 +202,21 @@ impl DeviceDispatcher {
                 .get(&id)
                 .expect("Error mapping pen keys")
                 .code();
-            self.emit_and_log(EventType::KEY, emit_key, state);
+            self.emit_and_log(EventType::KEY, emit_key, state, "pen btns");
         };
     }
 
-    fn emit_and_log(&mut self, event_type: EventType, code: u16, state: i32) {
-        // If event log is needed
+    fn emit(&mut self, event_type: EventType, code: u16, state: i32) {
         self.virtual_device
             .emit(&[InputEvent::new(event_type, code, state)])
             .expect("Error emiting");
+    }
+
+    fn emit_and_log(&mut self, event_type: EventType, code: u16, state: i32, message: &str) {
+        self.virtual_device
+            .emit(&[InputEvent::new(event_type, code, state)])
+            .expect("Error emiting");
+        println!("{message}: Type: {event_type:?} Code: {code} State: {state}");
     }
 
     fn binary_flags_to_tablet_key_events(&mut self, raw_button_as_flags: u16) {
@@ -206,12 +226,22 @@ impl DeviceDispatcher {
     }
 
     fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: i32, y_axis: i32, pressure: i32) {
-        self.emit_and_log(EventType::ABSOLUTE, AbsoluteAxisType::ABS_X.0, x_axis);
-        self.emit_and_log(EventType::ABSOLUTE, AbsoluteAxisType::ABS_Y.0, y_axis);
-        self.emit_and_log(
+        self.emit(EventType::ABSOLUTE, AbsoluteAxisType::ABS_X.0, x_axis);
+        self.emit(EventType::ABSOLUTE, AbsoluteAxisType::ABS_Y.0, y_axis);
+        self.emit(
             EventType::ABSOLUTE,
             AbsoluteAxisType::ABS_PRESSURE.0,
             pressure,
         );
+    }
+
+    fn pen_emit_touch(&mut self, raw_data: &RawDataReader) {
+        let is_touching = Self::normalize_pressure(raw_data.pressure()) > 0;
+        if let Some(state) = match (self.was_touching, is_touching) {
+            (false, true) => Some(0), //Pressed
+            (true, false) => Some(1), //Released
+            _ => None,
+        } {self.emit_and_log(EventType::KEY, Key::BTN_TOUCH.code(), state, "touch")}
+        self.was_touching = is_touching;
     }
 }

@@ -22,7 +22,7 @@ fn main() {
             Ok(_) => {
                 device_dispatcher.dispatch(&data_reader);
             }
-            Err(_e) => println!("Error reading buffer. Skipping."),
+            Err(_) => (),
         }
     });
 }
