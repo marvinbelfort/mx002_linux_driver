@@ -1,6 +1,7 @@
 use evdev::{
     uinput::{VirtualDevice, VirtualDeviceBuilder},
-    AbsInfo, AbsoluteAxisType, AttributeSet, EventType, InputEvent, Key, UinputAbsSetup,
+    AbsInfo, AbsoluteAxisType, AttributeSet, EventType, InputEvent, Key, Synchronization,
+    UinputAbsSetup,
 };
 use std::{collections::HashMap, u16};
 
@@ -209,13 +210,18 @@ impl DeviceDispatcher {
     fn emit(&mut self, event_type: EventType, code: u16, state: i32) {
         self.virtual_device
             .emit(&[InputEvent::new(event_type, code, state)])
-            .expect("Error emiting");
+            .expect("Error emitting");
+        // self.virtual_device
+        //     .emit(&[InputEvent::new(
+        //         EventType::SYNCHRONIZATION,
+        //         Synchronization::SYN_REPORT.0,
+        //         0,
+        //     )])
+        //     .expect("Error emitting SYN");
     }
 
     fn emit_and_log(&mut self, event_type: EventType, code: u16, state: i32, message: &str) {
-        self.virtual_device
-            .emit(&[InputEvent::new(event_type, code, state)])
-            .expect("Error emiting");
+        self.emit(event_type, code, state);
         println!("{message}: Type: {event_type:?} Code: {code} State: {state}");
     }
 
@@ -241,7 +247,9 @@ impl DeviceDispatcher {
             (false, true) => Some(0), //Pressed
             (true, false) => Some(1), //Released
             _ => None,
-        } {self.emit_and_log(EventType::KEY, Key::BTN_TOUCH.code(), state, "touch")}
+        } {
+            self.emit_and_log(EventType::KEY, Key::BTN_TOUCH.code(), state, "touch")
+        }
         self.was_touching = is_touching;
     }
 }
