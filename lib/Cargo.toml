@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-evdev = "0.12.1"
+evdev-rs = "0.6.1"
 rusb = "0.9.3"
 signal-hook = "0.3.17"
 

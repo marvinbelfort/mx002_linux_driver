@@ -1,8 +1,8 @@
-use evdev::{
-    uinput::{VirtualDevice, VirtualDeviceBuilder},
-    AbsInfo, AbsoluteAxisType, AttributeSet, EventType, InputEvent, Key, UinputAbsSetup,
-};
+#![allow(dead_code, unused)]
+
+
 use std::{collections::HashMap, u16};
+use evdev_rs::enums::{EV_KEY};
 
 pub struct RawDataReader {
     pub data: Vec<u8>,
@@ -137,6 +137,8 @@ impl DeviceDispatcher {
             x => x,
         }
     }
+
+    
 
     fn virtual_device_builder(
         pen_emitted_keys: &[Key],
