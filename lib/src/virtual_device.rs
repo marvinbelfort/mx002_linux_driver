@@ -211,13 +211,13 @@ impl DeviceDispatcher {
         self.virtual_device
             .emit(&[InputEvent::new(event_type, code, state)])
             .expect("Error emitting");
-        // self.virtual_device
-        //     .emit(&[InputEvent::new(
-        //         EventType::SYNCHRONIZATION,
-        //         Synchronization::SYN_REPORT.0,
-        //         0,
-        //     )])
-        //     .expect("Error emitting SYN");
+        self.virtual_device
+            .emit(&[InputEvent::new(
+                EventType::SYNCHRONIZATION,
+                Synchronization::SYN_REPORT.0,
+                0,
+            )])
+            .expect("Error emitting SYN");
     }
 
     fn emit_and_log(&mut self, event_type: EventType, code: u16, state: i32, message: &str) {
