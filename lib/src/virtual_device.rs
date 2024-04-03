@@ -1,3 +1,4 @@
+#![allow(unused, dead_code)]
 use evdev::{
     uinput::{VirtualDevice, VirtualDeviceBuilder},
     AbsInfo, AbsoluteAxisType, AttributeSet, EventType, InputEvent, Key, Synchronization,
@@ -88,7 +89,7 @@ impl DeviceDispatcher {
         let default_pen_emitted_keys: Vec<Key> = vec![Key::BTN_STYLUS, Key::BTN_STYLUS2];
 
         DeviceDispatcher {
-            tablet_last_raw_pressed_buttons: 0,
+            tablet_last_raw_pressed_buttons: 0xFFFF,
             pen_last_raw_pressed_buttons: 0,
             map_tablet_button_id_to_emitted_key: tablet_buttons_ids
                 .into_iter()
@@ -171,6 +172,12 @@ impl DeviceDispatcher {
             .build()
     }
 
+    fn binary_flags_to_tablet_key_events(&mut self, raw_button_as_flags: u16) {
+        (0..14)
+            .filter(|i| ![10, 11].contains(i))
+            .for_each(|i| self.emit_tablet_key_event(i, raw_button_as_flags));
+    }
+
     pub fn emit_tablet_key_event(&mut self, i: u8, raw_button_as_flags: u16) {
         let id_as_binary_mask = 1 << i;
         let is_pressed = (raw_button_as_flags & id_as_binary_mask) == 0;
@@ -179,15 +186,20 @@ impl DeviceDispatcher {
         if let Some(state) = match (was_pressed, is_pressed) {
             (false, true) => Some(0), //Pressed
             (true, false) => Some(1), //Released
-            (true, true) => Some(2),  //Hold: hardware does not support, will never emit.
-            (false, false) => None,
+            _ => None,
         } {
-            let emit_key = self
-                .map_tablet_button_id_to_emitted_key
-                .get(&i)
-                .expect("Error mapping tablet keys")
-                .code();
-            self.emit(EventType::KEY, emit_key, state);
+            if let Some(key) = self.map_tablet_button_id_to_emitted_key.get(&i) {
+                self.emit(EventType::KEY, key.code(), state);
+                self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
+                /* println!(
+                    "{:016b} is:{:05} was:{:05}[{:016b}] id[{i:02}]{:016b} : {state}",
+                    raw_button_as_flags,
+                    is_pressed,
+                    was_pressed,
+                    self.tablet_last_raw_pressed_buttons,
+                    id_as_binary_mask
+                ); */
+            }
         };
     }
 
@@ -203,7 +215,7 @@ impl DeviceDispatcher {
                 .get(&id)
                 .expect("Error mapping pen keys")
                 .code();
-            self.emit_and_log(EventType::KEY, emit_key, state, "pen btns");
+            self.emit(EventType::KEY, emit_key, state);
         };
     }
 
@@ -218,17 +230,6 @@ impl DeviceDispatcher {
                 0,
             )])
             .expect("Error emitting SYN");
-    }
-
-    fn emit_and_log(&mut self, event_type: EventType, code: u16, state: i32, message: &str) {
-        self.emit(event_type, code, state);
-        println!("{message}: Type: {event_type:?} Code: {code} State: {state}");
-    }
-
-    fn binary_flags_to_tablet_key_events(&mut self, raw_button_as_flags: u16) {
-        (0..14)
-            .filter(|i| ![10, 11].contains(i))
-            .for_each(|i| self.emit_tablet_key_event(i, raw_button_as_flags));
     }
 
     fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: i32, y_axis: i32, pressure: i32) {
@@ -248,7 +249,7 @@ impl DeviceDispatcher {
             (true, false) => Some(1), //Released
             _ => None,
         } {
-            self.emit_and_log(EventType::KEY, Key::BTN_TOUCH.code(), state, "touch")
+            self.emit(EventType::KEY, Key::BTN_TOUCH.code(), state)
         }
         self.was_touching = is_touching;
     }
