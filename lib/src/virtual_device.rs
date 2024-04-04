@@ -1,8 +1,9 @@
-#![allow(dead_code, unused)]
+#![allow(unused, dead_code)]
 
-
-use std::{collections::HashMap, u16};
-use evdev_rs::enums::{EV_KEY};
+use evdev::{
+    uinput::{VirtualDevice, VirtualDeviceBuilder}, AbsInfo, AbsoluteAxisType, AttributeSet, EventType, InputEvent, Key, PropType, Synchronization, UinputAbsSetup
+};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, u16};
 
 pub struct RawDataReader {
     pub data: Vec<u8>,
@@ -61,7 +62,8 @@ pub struct DeviceDispatcher {
     pen_last_raw_pressed_buttons: u8,
     map_tablet_button_id_to_emitted_key: HashMap<u8, Key>,
     map_pen_button_id_to_emitted_key: HashMap<u8, Key>,
-    virtual_device: VirtualDevice,
+    virtual_pen: Rc<RefCell<VirtualDevice>>,
+    virtual_keyboard: Rc<RefCell<VirtualDevice>>,
     was_touching: bool,
 }
 
@@ -87,7 +89,7 @@ impl DeviceDispatcher {
         let default_pen_emitted_keys: Vec<Key> = vec![Key::BTN_STYLUS, Key::BTN_STYLUS2];
 
         DeviceDispatcher {
-            tablet_last_raw_pressed_buttons: 0,
+            tablet_last_raw_pressed_buttons: 0xFFFF,
             pen_last_raw_pressed_buttons: 0,
             map_tablet_button_id_to_emitted_key: tablet_buttons_ids
                 .into_iter()
@@ -97,18 +99,18 @@ impl DeviceDispatcher {
                 .into_iter()
                 .zip(default_pen_emitted_keys.clone())
                 .collect(),
-            virtual_device: Self::virtual_device_builder(
-                &default_pen_emitted_keys,
-                &default_tablet_emitted_keys,
-            )
-            .expect("Error creating Virtual Device"),
+            virtual_pen: Self::virtual_pen_builder(&default_pen_emitted_keys)
+                .expect("Error creating Virtual Pen"),
+
+            virtual_keyboard: Self::virtual_keyboard_builder(&default_tablet_emitted_keys, &default_pen_emitted_keys)
+                .expect("Error creating Virtual keyboard"),
             was_touching: false,
         }
     }
 
     pub fn dispatch(&mut self, raw_data: &RawDataReader) {
-        self.emit_tablet_events(raw_data);
         self.emit_pen_events(raw_data);
+        // self.emit_tablet_events(raw_data);
     }
 
     fn emit_tablet_events(&mut self, raw_data: &RawDataReader) {
@@ -128,7 +130,7 @@ impl DeviceDispatcher {
             normalized_pressure,
         );
 
-        self.pen_emit_touch(raw_data);
+        // self.pen_emit_touch(raw_data);
     }
 
     fn normalize_pressure(raw_pressure: i32) -> i32 {
@@ -138,12 +140,9 @@ impl DeviceDispatcher {
         }
     }
 
-    
-
-    fn virtual_device_builder(
+    fn virtual_pen_builder(
         pen_emitted_keys: &[Key],
-        tablet_emitted_keys: &[Key],
-    ) -> Result<VirtualDevice, std::io::Error> {
+    ) -> Result<Rc<RefCell<VirtualDevice>>, std::io::Error> {
         let abs_x_setup =
             UinputAbsSetup::new(AbsoluteAxisType::ABS_X, AbsInfo::new(0, 0, 4096, 0, 0, 1));
         let abs_y_setup =
@@ -154,22 +153,49 @@ impl DeviceDispatcher {
         );
 
         let mut key_set = AttributeSet::<Key>::new();
-        for key in pen_emitted_keys {
-            key_set.insert(*key);
-        }
-        for key in tablet_emitted_keys {
-            key_set.insert(*key);
-        }
+
+        let mut properties = AttributeSet::<PropType>::new();
+        properties.insert(PropType::POINTER);
 
         key_set.insert(Key::BTN_TOOL_PEN);
 
-        VirtualDeviceBuilder::new()?
-            .name("virtual_tablet_and_stylus")
+        for key in pen_emitted_keys {
+            key_set.insert(*key);
+        }
+
+        let virtual_device = VirtualDeviceBuilder::new()?
+            .name("virtual_pen")
             .with_absolute_axis(&abs_x_setup)?
             .with_absolute_axis(&abs_y_setup)?
             .with_absolute_axis(&abs_pressure_setup)?
             .with_keys(&key_set)?
-            .build()
+            .with_properties(&properties)?
+            .build()?;
+
+        Ok(Rc::new(RefCell::new(virtual_device)))
+    }
+
+    fn virtual_keyboard_builder(
+        tablet_emitted_keys: &[Key],
+        pen_emitted_keys: &[Key],
+    ) -> Result<Rc<RefCell<VirtualDevice>>, std::io::Error> {
+        let mut key_set = AttributeSet::<Key>::new();
+        for key in tablet_emitted_keys {
+            key_set.insert(*key);
+        }
+
+        let virtual_device = VirtualDeviceBuilder::new()?
+            .name("virtual_keyboard")
+            .with_keys(&key_set)?
+            .build()?;
+
+        Ok(Rc::new(RefCell::new(virtual_device)))
+    }
+
+    fn binary_flags_to_tablet_key_events(&mut self, raw_button_as_flags: u16) {
+        (0..14)
+            .filter(|i| ![10, 11].contains(i))
+            .for_each(|i| self.emit_tablet_key_event(i, raw_button_as_flags));
     }
 
     pub fn emit_tablet_key_event(&mut self, i: u8, raw_button_as_flags: u16) {
@@ -180,16 +206,83 @@ impl DeviceDispatcher {
         if let Some(state) = match (was_pressed, is_pressed) {
             (false, true) => Some(0), //Pressed
             (true, false) => Some(1), //Released
-            (true, true) => Some(2),  //Hold: hardware does not support, will never emit.
-            (false, false) => None,
+            _ => None,
         } {
-            let emit_key = self
-                .map_tablet_button_id_to_emitted_key
-                .get(&i)
-                .expect("Error mapping tablet keys")
-                .code();
-            self.emit(EventType::KEY, emit_key, state);
+            if let Some(key) = self.map_tablet_button_id_to_emitted_key.get(&i) {
+                self.emit(
+                    &Rc::clone(&self.virtual_keyboard),
+                    EventType::KEY,
+                    key.code(),
+                    state,
+                );
+                self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
+                println!(
+                    "{:016b} is:{:05} was:{:05}[{:016b}] id[{i:02}]{:016b} : {state}",
+                    raw_button_as_flags,
+                    is_pressed,
+                    was_pressed,
+                    self.tablet_last_raw_pressed_buttons,
+                    id_as_binary_mask
+                );
+            }
         };
+    }
+
+    fn emit(
+        &mut self,
+        virtual_device: &Rc<RefCell<VirtualDevice>>,
+        event_type: EventType,
+        code: u16,
+        state: i32,
+    ) {
+        let mut messages = vec![InputEvent::new_now(event_type, code, state)];
+        messages.push(InputEvent::new_now(
+            EventType::SYNCHRONIZATION,
+            Synchronization::SYN_REPORT.0,
+            0,
+        ));
+        virtual_device
+            .borrow_mut()
+            .emit(&messages)
+            .expect("Error emitting");
+    }
+
+    fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: i32, y_axis: i32, pressure: i32) {
+        self.emit(
+            &Rc::clone(&self.virtual_pen),
+            EventType::ABSOLUTE,
+            AbsoluteAxisType::ABS_X.0,
+            x_axis,
+        );
+        self.emit(
+            &Rc::clone(&self.virtual_pen),
+            EventType::ABSOLUTE,
+            AbsoluteAxisType::ABS_Y.0,
+            y_axis,
+        );
+        self.emit(
+            &Rc::clone(&self.virtual_pen),
+            EventType::ABSOLUTE,
+            AbsoluteAxisType::ABS_PRESSURE.0,
+            pressure,
+        );
+    }
+
+    fn pen_emit_touch(&mut self, raw_data: &RawDataReader) {
+        let is_touching = Self::normalize_pressure(raw_data.pressure()) > 0;
+        if let Some(state) = match (self.was_touching, is_touching) {
+            (false, true) => Some(0), //Pressed
+            (true, false) => Some(1), //Released
+            _ => None,
+        } {
+            self.emit(
+                &Rc::clone(&self.virtual_pen),
+                EventType::KEY,
+                Key::BTN_TOUCH.code(),
+                state,
+            );
+        }
+        self.was_touching = is_touching;
     }
 
     fn raw_pen_buttons_to_pen_key_events(&mut self, pen_buttons: u8) {
@@ -204,46 +297,12 @@ impl DeviceDispatcher {
                 .get(&id)
                 .expect("Error mapping pen keys")
                 .code();
-            self.emit_and_log(EventType::KEY, emit_key, state, "pen btns");
+            self.emit(
+                &Rc::clone(&self.virtual_pen),
+                EventType::KEY,
+                emit_key,
+                state,
+            );
         };
-    }
-
-    fn emit(&mut self, event_type: EventType, code: u16, state: i32) {
-        self.virtual_device
-            .emit(&[InputEvent::new(event_type, code, state)])
-            .expect("Error emiting");
-    }
-
-    fn emit_and_log(&mut self, event_type: EventType, code: u16, state: i32, message: &str) {
-        self.virtual_device
-            .emit(&[InputEvent::new(event_type, code, state)])
-            .expect("Error emiting");
-        println!("{message}: Type: {event_type:?} Code: {code} State: {state}");
-    }
-
-    fn binary_flags_to_tablet_key_events(&mut self, raw_button_as_flags: u16) {
-        (0..14)
-            .filter(|i| ![10, 11].contains(i))
-            .for_each(|i| self.emit_tablet_key_event(i, raw_button_as_flags));
-    }
-
-    fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: i32, y_axis: i32, pressure: i32) {
-        self.emit(EventType::ABSOLUTE, AbsoluteAxisType::ABS_X.0, x_axis);
-        self.emit(EventType::ABSOLUTE, AbsoluteAxisType::ABS_Y.0, y_axis);
-        self.emit(
-            EventType::ABSOLUTE,
-            AbsoluteAxisType::ABS_PRESSURE.0,
-            pressure,
-        );
-    }
-
-    fn pen_emit_touch(&mut self, raw_data: &RawDataReader) {
-        let is_touching = Self::normalize_pressure(raw_data.pressure()) > 0;
-        if let Some(state) = match (self.was_touching, is_touching) {
-            (false, true) => Some(0), //Pressed
-            (true, false) => Some(1), //Released
-            _ => None,
-        } {self.emit_and_log(EventType::KEY, Key::BTN_TOUCH.code(), state, "touch")}
-        self.was_touching = is_touching;
     }
 }
