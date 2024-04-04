@@ -1,9 +1,8 @@
 #![allow(unused, dead_code)]
 
-use evdev::{
-    uinput::{VirtualDevice, VirtualDeviceBuilder}, AbsInfo, AbsoluteAxisType, AttributeSet, EventType, InputEvent, Key, PropType, Synchronization, UinputAbsSetup
-};
 use std::{cell::RefCell, collections::HashMap, rc::Rc, u16};
+
+use evdev_rs::UninitDevice;
 
 pub struct RawDataReader {
     pub data: Vec<u8>,
@@ -57,6 +56,15 @@ impl RawDataReader {
     }
 }
 
+pub struct VirtualDevice {}
+
+impl VirtualDevice {
+    pub fn new() -> Self {
+        let uninit_device = UninitDevice::new().unwrap();
+        VirtualDevice {}
+    }
+}
+
 pub struct DeviceDispatcher {
     tablet_last_raw_pressed_buttons: u16,
     pen_last_raw_pressed_buttons: u8,
@@ -102,8 +110,11 @@ impl DeviceDispatcher {
             virtual_pen: Self::virtual_pen_builder(&default_pen_emitted_keys)
                 .expect("Error creating Virtual Pen"),
 
-            virtual_keyboard: Self::virtual_keyboard_builder(&default_tablet_emitted_keys, &default_pen_emitted_keys)
-                .expect("Error creating Virtual keyboard"),
+            virtual_keyboard: Self::virtual_keyboard_builder(
+                &default_tablet_emitted_keys,
+                &default_pen_emitted_keys,
+            )
+            .expect("Error creating Virtual keyboard"),
             was_touching: false,
         }
     }
