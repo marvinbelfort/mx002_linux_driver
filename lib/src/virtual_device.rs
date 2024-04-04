@@ -1,9 +1,7 @@
 #![allow(unused, dead_code)]
 
 use evdev::{
-    uinput::{VirtualDevice, VirtualDeviceBuilder},
-    AbsInfo, AbsoluteAxisType, AttributeSet, EventType, InputEvent, Key, Synchronization,
-    UinputAbsSetup,
+    uinput::{VirtualDevice, VirtualDeviceBuilder}, AbsInfo, AbsoluteAxisType, AttributeSet, EventType, InputEvent, Key, PropType, Synchronization, UinputAbsSetup
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc, u16};
 
@@ -104,15 +102,15 @@ impl DeviceDispatcher {
             virtual_pen: Self::virtual_pen_builder(&default_pen_emitted_keys)
                 .expect("Error creating Virtual Pen"),
 
-            virtual_keyboard: Self::virtual_keyboard_builder(&default_tablet_emitted_keys)
+            virtual_keyboard: Self::virtual_keyboard_builder(&default_tablet_emitted_keys, &default_pen_emitted_keys)
                 .expect("Error creating Virtual keyboard"),
             was_touching: false,
         }
     }
 
     pub fn dispatch(&mut self, raw_data: &RawDataReader) {
-        self.emit_tablet_events(raw_data);
         self.emit_pen_events(raw_data);
+        // self.emit_tablet_events(raw_data);
     }
 
     fn emit_tablet_events(&mut self, raw_data: &RawDataReader) {
@@ -132,7 +130,7 @@ impl DeviceDispatcher {
             normalized_pressure,
         );
 
-        self.pen_emit_touch(raw_data);
+        // self.pen_emit_touch(raw_data);
     }
 
     fn normalize_pressure(raw_pressure: i32) -> i32 {
@@ -155,11 +153,15 @@ impl DeviceDispatcher {
         );
 
         let mut key_set = AttributeSet::<Key>::new();
+
+        let mut properties = AttributeSet::<PropType>::new();
+        properties.insert(PropType::POINTER);
+
+        key_set.insert(Key::BTN_TOOL_PEN);
+
         for key in pen_emitted_keys {
             key_set.insert(*key);
         }
-
-        key_set.insert(Key::BTN_TOOL_PEN);
 
         let virtual_device = VirtualDeviceBuilder::new()?
             .name("virtual_pen")
@@ -167,6 +169,7 @@ impl DeviceDispatcher {
             .with_absolute_axis(&abs_y_setup)?
             .with_absolute_axis(&abs_pressure_setup)?
             .with_keys(&key_set)?
+            .with_properties(&properties)?
             .build()?;
 
         Ok(Rc::new(RefCell::new(virtual_device)))
@@ -174,6 +177,7 @@ impl DeviceDispatcher {
 
     fn virtual_keyboard_builder(
         tablet_emitted_keys: &[Key],
+        pen_emitted_keys: &[Key],
     ) -> Result<Rc<RefCell<VirtualDevice>>, std::io::Error> {
         let mut key_set = AttributeSet::<Key>::new();
         for key in tablet_emitted_keys {
@@ -224,27 +228,6 @@ impl DeviceDispatcher {
         };
     }
 
-    fn raw_pen_buttons_to_pen_key_events(&mut self, pen_buttons: u8) {
-        if let Some((state, id)) = match (self.pen_last_raw_pressed_buttons, pen_buttons) {
-            (2, x) if x == 6 || x == 4 => Some((0, x)),
-            (x, 2) if x == 6 || x == 4 => Some((1, x)),
-            (x, y) if x != 2 && x == y => Some((2, x)),
-            _ => None,
-        } {
-            let emit_key = self
-                .map_pen_button_id_to_emitted_key
-                .get(&id)
-                .expect("Error mapping pen keys")
-                .code();
-            self.emit(
-                &Rc::clone(&self.virtual_pen),
-                EventType::KEY,
-                emit_key,
-                state,
-            );
-        };
-    }
-
     fn emit(
         &mut self,
         virtual_device: &Rc<RefCell<VirtualDevice>>,
@@ -252,12 +235,15 @@ impl DeviceDispatcher {
         code: u16,
         state: i32,
     ) {
+        let mut messages = vec![InputEvent::new_now(event_type, code, state)];
+        messages.push(InputEvent::new_now(
+            EventType::SYNCHRONIZATION,
+            Synchronization::SYN_REPORT.0,
+            0,
+        ));
         virtual_device
             .borrow_mut()
-            .emit(&[
-                InputEvent::new(event_type, code, state),
-                InputEvent::new(EventType::SYNCHRONIZATION, Synchronization::SYN_REPORT.0, 0),
-            ])
+            .emit(&messages)
             .expect("Error emitting");
     }
 
@@ -297,5 +283,26 @@ impl DeviceDispatcher {
             );
         }
         self.was_touching = is_touching;
+    }
+
+    fn raw_pen_buttons_to_pen_key_events(&mut self, pen_buttons: u8) {
+        if let Some((state, id)) = match (self.pen_last_raw_pressed_buttons, pen_buttons) {
+            (2, x) if x == 6 || x == 4 => Some((0, x)),
+            (x, 2) if x == 6 || x == 4 => Some((1, x)),
+            (x, y) if x != 2 && x == y => Some((2, x)),
+            _ => None,
+        } {
+            let emit_key = self
+                .map_pen_button_id_to_emitted_key
+                .get(&id)
+                .expect("Error mapping pen keys")
+                .code();
+            self.emit(
+                &Rc::clone(&self.virtual_pen),
+                EventType::KEY,
+                emit_key,
+                state,
+            );
+        };
     }
 }
