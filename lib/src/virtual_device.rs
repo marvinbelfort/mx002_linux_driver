@@ -1,8 +1,10 @@
 #![allow(unused, dead_code)]
 
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{cell::RefCell, collections::HashMap, rc::Rc, u16};
 
-use evdev_rs::UninitDevice;
+use evdev_rs::enums::{EventCode, EV_ABS, EV_KEY, EV_SYN};
+use evdev_rs::{DeviceWrapper, InputEvent, TimeVal, UInputDevice, UninitDevice};
 
 pub struct RawDataReader {
     pub data: Vec<u8>,
@@ -56,45 +58,100 @@ impl RawDataReader {
     }
 }
 
-pub struct VirtualDevice {}
+pub struct VirtualDevice {
+    uinput_device: UInputDevice,
+}
 
 impl VirtualDevice {
-    pub fn new() -> Self {
+    pub fn emit(&self, event_code: EventCode, value: i32) -> Result<(), std::io::Error> {
+        self.uinput_device.write_event(&InputEvent {
+            time: VirtualDevice::now(),
+            event_code,
+            value,
+        })?;
+        Ok(())
+    }
+
+    pub fn syn(&self) -> Result<(), std::io::Error> {
+        self.emit(EventCode::EV_SYN(EV_SYN::SYN_REPORT), 0)?;
+        Ok(())
+    }
+
+    fn now() -> TimeVal {
+        let current_time = SystemTime::now();
+        let duration_since_epoch = current_time
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+        let tv_sec = duration_since_epoch.as_secs() as i64; // `time_t` geralmente é um i64
+        let tv_usec = duration_since_epoch.subsec_micros() as i64; // `suseconds_t` geralmente é um i64 ou i32, dependendo do sistema
+
+        TimeVal::new(tv_sec, tv_usec)
+    }
+}
+
+pub struct VirtualDeviceBuilder {
+    uninit_device: UninitDevice,
+}
+
+impl VirtualDeviceBuilder {
+    pub fn new(name: &str) -> Self {
         let uninit_device = UninitDevice::new().unwrap();
-        VirtualDevice {}
+        uninit_device.set_name(name);
+        VirtualDeviceBuilder { uninit_device }
+    }
+
+    pub fn enable_keys(& mut self, keys: &[EV_KEY]) -> &mut Self {
+        for &key in keys {
+            self.uninit_device.enable(EventCode::EV_KEY(key));
+        }
+        self
+    }
+
+    pub fn enable_abs(& mut self, absolutes: &[EV_ABS]) -> & mut Self {
+        for &absolute in absolutes {
+            self.uninit_device.enable(EventCode::EV_ABS(absolute));
+        }
+        self
+    }
+
+    pub fn build(&mut self) -> VirtualDevice {
+        self.uninit_device
+            .enable(EventCode::EV_SYN(EV_SYN::SYN_REPORT));
+        let uinput_device = UInputDevice::create_from_device(&self.uninit_device).unwrap();
+        VirtualDevice { uinput_device }
     }
 }
 
 pub struct DeviceDispatcher {
     tablet_last_raw_pressed_buttons: u16,
     pen_last_raw_pressed_buttons: u8,
-    map_tablet_button_id_to_emitted_key: HashMap<u8, Key>,
-    map_pen_button_id_to_emitted_key: HashMap<u8, Key>,
-    virtual_pen: Rc<RefCell<VirtualDevice>>,
-    virtual_keyboard: Rc<RefCell<VirtualDevice>>,
+    map_tablet_button_id_to_emitted_key: HashMap<u8, EV_KEY>,
+    map_pen_button_id_to_emitted_key: HashMap<u8, EV_KEY>,
+    // virtual_pen: VirtualDevice,
+    virtual_keyboard: VirtualDevice,
     was_touching: bool,
 }
 
 impl DeviceDispatcher {
     pub fn new() -> Self {
         let tablet_buttons_ids: Vec<u8> = (0..14).filter(|i| ![10, 11].contains(i)).collect();
-        let default_tablet_emitted_keys: Vec<Key> = vec![
-            Key::KEY_TAB,
-            Key::KEY_SPACE,
-            Key::KEY_LEFTALT,
-            Key::KEY_LEFTCTRL,
-            Key::KEY_SCROLLDOWN,
-            Key::KEY_SCROLLUP,
-            Key::KEY_LEFTBRACE,
-            Key::KEY_KPMINUS,
-            Key::KEY_KPPLUS,
-            Key::KEY_E,
-            Key::KEY_B,
-            Key::KEY_RIGHTBRACE,
+        let mut default_tablet_emitted_keys: Vec<EV_KEY> = vec![
+            EV_KEY::KEY_TAB,
+            EV_KEY::KEY_SPACE,
+            EV_KEY::KEY_LEFTALT,
+            EV_KEY::KEY_LEFTCTRL,
+            EV_KEY::KEY_SCROLLDOWN,
+            EV_KEY::KEY_SCROLLUP,
+            EV_KEY::KEY_LEFTBRACE,
+            EV_KEY::KEY_KPMINUS,
+            EV_KEY::KEY_KPPLUS,
+            EV_KEY::KEY_E,
+            EV_KEY::KEY_B,
+            EV_KEY::KEY_RIGHTBRACE,
         ];
 
         let pen_buttons_ids: Vec<u8> = vec![4, 6];
-        let default_pen_emitted_keys: Vec<Key> = vec![Key::BTN_STYLUS, Key::BTN_STYLUS2];
+        let default_pen_emitted_keys: Vec<EV_KEY> = vec![EV_KEY::BTN_STYLUS, EV_KEY::BTN_STYLUS2];
 
         DeviceDispatcher {
             tablet_last_raw_pressed_buttons: 0xFFFF,
@@ -107,21 +164,16 @@ impl DeviceDispatcher {
                 .into_iter()
                 .zip(default_pen_emitted_keys.clone())
                 .collect(),
-            virtual_pen: Self::virtual_pen_builder(&default_pen_emitted_keys)
-                .expect("Error creating Virtual Pen"),
-
-            virtual_keyboard: Self::virtual_keyboard_builder(
-                &default_tablet_emitted_keys,
-                &default_pen_emitted_keys,
-            )
-            .expect("Error creating Virtual keyboard"),
+            // virtual_pen: Self::virtual_pen_builder(&default_pen_emitted_keys)
+            //     .expect("Error creating Virtual Pen"),
+            virtual_keyboard: Self::virtual_keyboard_builder(&mut default_tablet_emitted_keys),
             was_touching: false,
         }
     }
 
     pub fn dispatch(&mut self, raw_data: &RawDataReader) {
-        self.emit_pen_events(raw_data);
-        // self.emit_tablet_events(raw_data);
+        // self.emit_pen_events(raw_data);
+        self.emit_tablet_events(raw_data);
     }
 
     fn emit_tablet_events(&mut self, raw_data: &RawDataReader) {
@@ -130,7 +182,7 @@ impl DeviceDispatcher {
         self.tablet_last_raw_pressed_buttons = raw_button_as_binary_flags;
     }
 
-    fn emit_pen_events(&mut self, raw_data: &RawDataReader) {
+    /* fn emit_pen_events(&mut self, raw_data: &RawDataReader) {
         let raw_pen_buttons = raw_data.pen_buttons();
         self.raw_pen_buttons_to_pen_key_events(raw_pen_buttons);
         self.pen_last_raw_pressed_buttons = raw_pen_buttons;
@@ -142,7 +194,7 @@ impl DeviceDispatcher {
         );
 
         // self.pen_emit_touch(raw_data);
-    }
+    } */
 
     fn normalize_pressure(raw_pressure: i32) -> i32 {
         match 1740 - raw_pressure {
@@ -151,17 +203,17 @@ impl DeviceDispatcher {
         }
     }
 
-    fn virtual_pen_builder(
+    /* fn virtual_pen_builder(
         pen_emitted_keys: &[Key],
     ) -> Result<Rc<RefCell<VirtualDevice>>, std::io::Error> {
-        let abs_x_setup =
-            UinputAbsSetup::new(AbsoluteAxisType::ABS_X, AbsInfo::new(0, 0, 4096, 0, 0, 1));
-        let abs_y_setup =
-            UinputAbsSetup::new(AbsoluteAxisType::ABS_Y, AbsInfo::new(0, 0, 4096, 0, 0, 1));
-        let abs_pressure_setup = UinputAbsSetup::new(
-            AbsoluteAxisType::ABS_PRESSURE,
-            AbsInfo::new(0, 0, 1024, 0, 0, 1),
-        );
+        // let abs_x_setup =
+        //     UinputAbsSetup::new(AbsoluteAxisType::ABS_X, AbsInfo::new(0, 0, 4096, 0, 0, 1));
+        // let abs_y_setup =
+        //     UinputAbsSetup::new(AbsoluteAxisType::ABS_Y, AbsInfo::new(0, 0, 4096, 0, 0, 1));
+        // let abs_pressure_setup = UinputAbsSetup::new(
+        //     AbsoluteAxisType::ABS_PRESSURE,
+        //     AbsInfo::new(0, 0, 1024, 0, 0, 1),
+        // );
 
         let mut key_set = AttributeSet::<Key>::new();
 
@@ -184,23 +236,12 @@ impl DeviceDispatcher {
             .build()?;
 
         Ok(Rc::new(RefCell::new(virtual_device)))
-    }
+    } */
 
-    fn virtual_keyboard_builder(
-        tablet_emitted_keys: &[Key],
-        pen_emitted_keys: &[Key],
-    ) -> Result<Rc<RefCell<VirtualDevice>>, std::io::Error> {
-        let mut key_set = AttributeSet::<Key>::new();
-        for key in tablet_emitted_keys {
-            key_set.insert(*key);
-        }
-
-        let virtual_device = VirtualDeviceBuilder::new()?
-            .name("virtual_keyboard")
-            .with_keys(&key_set)?
-            .build()?;
-
-        Ok(Rc::new(RefCell::new(virtual_device)))
+    fn virtual_keyboard_builder(tablet_emitted_keys: &mut[EV_KEY]) -> VirtualDevice {
+        let name = "virtual_keyboard";
+        let mut vd = VirtualDeviceBuilder::new(name);
+        vd.enable_keys(& tablet_emitted_keys).build()
     }
 
     fn binary_flags_to_tablet_key_events(&mut self, raw_button_as_flags: u16) {
@@ -219,13 +260,8 @@ impl DeviceDispatcher {
             (true, false) => Some(1), //Released
             _ => None,
         } {
-            if let Some(key) = self.map_tablet_button_id_to_emitted_key.get(&i) {
-                self.emit(
-                    &Rc::clone(&self.virtual_keyboard),
-                    EventType::KEY,
-                    key.code(),
-                    state,
-                );
+            if let Some(&key) = self.map_tablet_button_id_to_emitted_key.get(&i) {
+                self.virtual_keyboard.emit(EventCode::EV_KEY(key), state);
                 self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
                 println!(
                     "{:016b} is:{:05} was:{:05}[{:016b}] id[{i:02}]{:016b} : {state}",
@@ -239,26 +275,7 @@ impl DeviceDispatcher {
         };
     }
 
-    fn emit(
-        &mut self,
-        virtual_device: &Rc<RefCell<VirtualDevice>>,
-        event_type: EventType,
-        code: u16,
-        state: i32,
-    ) {
-        let mut messages = vec![InputEvent::new_now(event_type, code, state)];
-        messages.push(InputEvent::new_now(
-            EventType::SYNCHRONIZATION,
-            Synchronization::SYN_REPORT.0,
-            0,
-        ));
-        virtual_device
-            .borrow_mut()
-            .emit(&messages)
-            .expect("Error emitting");
-    }
-
-    fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: i32, y_axis: i32, pressure: i32) {
+    /* fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: i32, y_axis: i32, pressure: i32) {
         self.emit(
             &Rc::clone(&self.virtual_pen),
             EventType::ABSOLUTE,
@@ -277,9 +294,9 @@ impl DeviceDispatcher {
             AbsoluteAxisType::ABS_PRESSURE.0,
             pressure,
         );
-    }
+    } */
 
-    fn pen_emit_touch(&mut self, raw_data: &RawDataReader) {
+    /* fn pen_emit_touch(&mut self, raw_data: &RawDataReader) {
         let is_touching = Self::normalize_pressure(raw_data.pressure()) > 0;
         if let Some(state) = match (self.was_touching, is_touching) {
             (false, true) => Some(0), //Pressed
@@ -294,9 +311,9 @@ impl DeviceDispatcher {
             );
         }
         self.was_touching = is_touching;
-    }
+    } */
 
-    fn raw_pen_buttons_to_pen_key_events(&mut self, pen_buttons: u8) {
+    /* fn raw_pen_buttons_to_pen_key_events(&mut self, pen_buttons: u8) {
         if let Some((state, id)) = match (self.pen_last_raw_pressed_buttons, pen_buttons) {
             (2, x) if x == 6 || x == 4 => Some((0, x)),
             (x, 2) if x == 6 || x == 4 => Some((1, x)),
@@ -315,5 +332,5 @@ impl DeviceDispatcher {
                 state,
             );
         };
-    }
+    } */
 }
