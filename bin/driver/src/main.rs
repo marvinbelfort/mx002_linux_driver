@@ -21,6 +21,7 @@ fn main() {
         || match physical_device.read_device_responses(&mut data_reader.data) {
             Ok(_) => {
                 device_dispatcher.dispatch(&data_reader);
+                device_dispatcher.syn();
             }
             Err(_) => (),
         }

@@ -171,6 +171,10 @@ impl DeviceDispatcher {
         }
     }
 
+    pub fn syn(&self){
+        self.virtual_keyboard.syn();
+    }
+
     pub fn dispatch(&mut self, raw_data: &RawDataReader) {
         // self.emit_pen_events(raw_data);
         self.emit_tablet_events(raw_data);
@@ -182,6 +186,43 @@ impl DeviceDispatcher {
         self.tablet_last_raw_pressed_buttons = raw_button_as_binary_flags;
     }
 
+    fn virtual_keyboard_builder(tablet_emitted_keys: &mut[EV_KEY]) -> VirtualDevice {
+        let name = "virtual_keyboard";
+        let mut vd = VirtualDeviceBuilder::new(name);
+        vd.enable_keys(& tablet_emitted_keys).build()
+    }
+
+    fn binary_flags_to_tablet_key_events(&mut self, raw_button_as_flags: u16) {
+        (0..14)
+            .filter(|i| ![10, 11].contains(i))
+            .for_each(|i| self.emit_tablet_key_event(i, raw_button_as_flags));
+    }
+
+    pub fn emit_tablet_key_event(&mut self, i: u8, raw_button_as_flags: u16) {
+        let id_as_binary_mask = 1 << i;
+        let is_pressed = (raw_button_as_flags & id_as_binary_mask) == 0;
+        let was_pressed = (self.tablet_last_raw_pressed_buttons & id_as_binary_mask) == 0;
+
+        if let Some(state) = match (was_pressed, is_pressed) {
+            (false, true) => Some(1), //Pressed
+            (true, false) => Some(0), //Released
+            // (true, true) => Some(2), //Hold
+            _ => None,
+        } {
+            if let Some(&key) = self.map_tablet_button_id_to_emitted_key.get(&i) {
+                self.virtual_keyboard.emit(EventCode::EV_KEY(key), state);
+                self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
+                println!(
+                    "{:016b} is:{:05} was:{:05}[{:016b}] id[{i:02}]{:016b} : {state}",
+                    raw_button_as_flags,
+                    is_pressed,
+                    was_pressed,
+                    self.tablet_last_raw_pressed_buttons,
+                    id_as_binary_mask
+                );
+            }
+        };
+    }
     /* fn emit_pen_events(&mut self, raw_data: &RawDataReader) {
         let raw_pen_buttons = raw_data.pen_buttons();
         self.raw_pen_buttons_to_pen_key_events(raw_pen_buttons);
@@ -196,12 +237,12 @@ impl DeviceDispatcher {
         // self.pen_emit_touch(raw_data);
     } */
 
-    fn normalize_pressure(raw_pressure: i32) -> i32 {
+    /* fn normalize_pressure(raw_pressure: i32) -> i32 {
         match 1740 - raw_pressure {
             x if x <= 0 => 0,
             x => x,
         }
-    }
+    } */
 
     /* fn virtual_pen_builder(
         pen_emitted_keys: &[Key],
@@ -238,43 +279,6 @@ impl DeviceDispatcher {
         Ok(Rc::new(RefCell::new(virtual_device)))
     } */
 
-    fn virtual_keyboard_builder(tablet_emitted_keys: &mut[EV_KEY]) -> VirtualDevice {
-        let name = "virtual_keyboard";
-        let mut vd = VirtualDeviceBuilder::new(name);
-        vd.enable_keys(& tablet_emitted_keys).build()
-    }
-
-    fn binary_flags_to_tablet_key_events(&mut self, raw_button_as_flags: u16) {
-        (0..14)
-            .filter(|i| ![10, 11].contains(i))
-            .for_each(|i| self.emit_tablet_key_event(i, raw_button_as_flags));
-    }
-
-    pub fn emit_tablet_key_event(&mut self, i: u8, raw_button_as_flags: u16) {
-        let id_as_binary_mask = 1 << i;
-        let is_pressed = (raw_button_as_flags & id_as_binary_mask) == 0;
-        let was_pressed = (self.tablet_last_raw_pressed_buttons & id_as_binary_mask) == 0;
-
-        if let Some(state) = match (was_pressed, is_pressed) {
-            (false, true) => Some(0), //Pressed
-            (true, false) => Some(1), //Released
-            _ => None,
-        } {
-            if let Some(&key) = self.map_tablet_button_id_to_emitted_key.get(&i) {
-                self.virtual_keyboard.emit(EventCode::EV_KEY(key), state);
-                self.virtual_keyboard.syn();
-                self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
-                println!(
-                    "{:016b} is:{:05} was:{:05}[{:016b}] id[{i:02}]{:016b} : {state}",
-                    raw_button_as_flags,
-                    is_pressed,
-                    was_pressed,
-                    self.tablet_last_raw_pressed_buttons,
-                    id_as_binary_mask
-                );
-            }
-        };
-    }
 
     /* fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: i32, y_axis: i32, pressure: i32) {
         self.emit(
