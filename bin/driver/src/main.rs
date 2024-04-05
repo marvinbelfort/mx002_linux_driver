@@ -18,17 +18,21 @@ fn main() {
     let mut device_dispatcher = DeviceDispatcher::new();
 
     main_loop({
-        || match physical_device.read_device_responses(&mut data_reader.data) {
-            Ok(_) => {
+        || {
+            if physical_device
+                .read_device_responses(&mut data_reader.data)
+                .is_ok()
+            {
                 device_dispatcher.dispatch(&data_reader);
-                device_dispatcher.syn();
+                if device_dispatcher.syn().is_err() {
+                    println!("Error emitting SYN");
+                }
             }
-            Err(_) => (),
         }
     });
 }
 
-fn main_loop(mut f: impl FnMut() -> ()) {
+fn main_loop(mut f: impl FnMut()) {
     let signals: Vec<i32> = vec![SIGINT, SIGTERM, SIGQUIT];
     let flag = Arc::new(AtomicBool::new(false));
 

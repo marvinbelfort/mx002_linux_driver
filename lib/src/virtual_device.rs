@@ -1,13 +1,12 @@
-#![allow(unused, dead_code)]
-
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::{cell::RefCell, collections::HashMap, rc::Rc, u16};
+use std::io::Error;
+use std::{collections::HashMap, u16};
 
 use evdev_rs::enums::{EventCode, EV_ABS, EV_KEY, EV_SYN};
 use evdev_rs::{
     AbsInfo, DeviceWrapper, EnableCodeData, InputEvent, TimeVal, UInputDevice, UninitDevice,
 };
 
+#[derive(Default)]
 pub struct RawDataReader {
     pub data: Vec<u8>,
 }
@@ -65,7 +64,7 @@ pub struct VirtualDevice {
 }
 
 impl VirtualDevice {
-    pub fn emit(&self, event_code: EventCode, value: i32) -> Result<(), std::io::Error> {
+    pub fn emit(&self, event_code: EventCode, value: i32) -> Result<(), Error> {
         self.uinput_device.write_event(&InputEvent {
             time: TimeVal {
                 tv_sec: 0,
@@ -77,21 +76,10 @@ impl VirtualDevice {
         Ok(())
     }
 
-    pub fn syn(&self) -> Result<(), std::io::Error> {
+    pub fn syn(&self) -> Result<(), Error> {
         self.emit(EventCode::EV_SYN(EV_SYN::SYN_REPORT), 0)?;
         Ok(())
     }
-
-    /* fn now() -> TimeVal {
-        let current_time = SystemTime::now();
-        let duration_since_epoch = current_time
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
-        let tv_sec = duration_since_epoch.as_secs() as i64; // `time_t` geralmente é um i64
-        let tv_usec = duration_since_epoch.subsec_micros() as i64; // `suseconds_t` geralmente é um i64 ou i32, dependendo do sistema
-
-        TimeVal::new(tv_sec, tv_usec)
-    } */
 }
 
 pub struct VirtualDeviceBuilder {
@@ -99,32 +87,35 @@ pub struct VirtualDeviceBuilder {
 }
 
 impl VirtualDeviceBuilder {
-    pub fn new(name: &str) -> Self {
-        let uninit_device = UninitDevice::new().unwrap();
-        uninit_device.set_name(name);
-        VirtualDeviceBuilder { uninit_device }
+    pub fn new(name: &str) -> Option<Self> {
+        if let Some(uninit_device) = UninitDevice::new() {
+            uninit_device.set_name(name);
+            return Some(VirtualDeviceBuilder { uninit_device });
+        };
+        None
     }
 
-    pub fn enable_keys(&mut self, keys: &[EV_KEY]) -> &mut Self {
+    pub fn enable_keys(&mut self, keys: &[EV_KEY]) -> Result<&mut Self, Error> {
         for &key in keys {
-            self.uninit_device.enable(EventCode::EV_KEY(key));
+            if self.uninit_device.enable(EventCode::EV_KEY(key)).is_err() {
+                println!("Error enabling key");
+            }
         }
-        self
+        Ok(self)
     }
 
-    pub fn enable_abs(&mut self, ev_abs: EV_ABS, abs_info: AbsInfo) -> &mut Self {
+    pub fn enable_abs(&mut self, ev_abs: EV_ABS, abs_info: AbsInfo) -> Result<&mut Self, Error> {
         let enabled_code_data_x = EnableCodeData::AbsInfo(abs_info);
         self.uninit_device
-            .enable_event_code(&EventCode::EV_ABS(ev_abs), Some(enabled_code_data_x))
-            .expect("Erro ativando abs");
-        self
+            .enable_event_code(&EventCode::EV_ABS(ev_abs), Some(enabled_code_data_x))?;
+        Ok(self)
     }
 
-    pub fn build(&mut self) -> VirtualDevice {
+    pub fn build(&mut self) -> Result<VirtualDevice, Error> {
         self.uninit_device
-            .enable(EventCode::EV_SYN(EV_SYN::SYN_REPORT));
+            .enable(EventCode::EV_SYN(EV_SYN::SYN_REPORT))?;
         let uinput_device = UInputDevice::create_from_device(&self.uninit_device).unwrap();
-        VirtualDevice { uinput_device }
+        Ok(VirtualDevice { uinput_device })
     }
 }
 
@@ -138,14 +129,18 @@ pub struct DeviceDispatcher {
     was_touching: bool,
 }
 
+impl Default for DeviceDispatcher{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DeviceDispatcher {
-        const PRESSED: i32 = 1;
-        const RELEASED: i32 = 0;
-        const HOLD:i32 = 2;
+    const PRESSED: i32 = 1;
+    const RELEASED: i32 = 0;
+    const HOLD: i32 = 2;
 
     pub fn new() -> Self {
-
-
         let tablet_buttons_ids: Vec<u8> = (0..14).filter(|i| ![10, 11].contains(i)).collect();
         let mut default_tablet_emitted_keys: Vec<EV_KEY> = vec![
             EV_KEY::KEY_TAB,
@@ -182,8 +177,10 @@ impl DeviceDispatcher {
         }
     }
 
-    pub fn syn(&self) {
-        self.virtual_keyboard.syn();
+    pub fn syn(&self) -> Result<(), Error> {
+        self.virtual_keyboard.syn()?;
+        self.virtual_pen.syn()?;
+        Ok(())
     }
 
     pub fn dispatch(&mut self, raw_data: &RawDataReader) {
@@ -198,8 +195,12 @@ impl DeviceDispatcher {
     }
 
     fn virtual_keyboard_builder(tablet_emitted_keys: &mut [EV_KEY]) -> VirtualDevice {
-        let mut vd = VirtualDeviceBuilder::new("virtual_keyboard");
-        vd.enable_keys(&tablet_emitted_keys).build()
+        let mut vd = VirtualDeviceBuilder::new("virtual_keyboard")
+            .expect("Error initializig Virtual keyboard");
+        vd.enable_keys(tablet_emitted_keys)
+            .expect("Error enablig keys for virtual keyboard")
+            .build()
+            .expect("Error creating virtual keyboard")
     }
 
     fn binary_flags_to_tablet_key_events(&mut self, raw_button_as_flags: u16) {
@@ -214,22 +215,19 @@ impl DeviceDispatcher {
         let was_pressed = (self.tablet_last_raw_pressed_buttons & id_as_binary_mask) == 0;
 
         if let Some(state) = match (was_pressed, is_pressed) {
-            (false, true) => Some(Self::PRESSED), //Pressed
-            (true, false) => Some(Self::RELEASED), //Released
-            // (true, true) => Some(2), //Hold
+            (false, true) => Some(Self::PRESSED),
+            (true, false) => Some(Self::RELEASED),
             _ => None,
         } {
             if let Some(&key) = self.map_tablet_button_id_to_emitted_key.get(&i) {
-                self.virtual_keyboard.emit(EventCode::EV_KEY(key), state);
+                if self
+                    .virtual_keyboard
+                    .emit(EventCode::EV_KEY(key), state)
+                    .is_err()
+                {
+                    println!("Error emitting vitual tablet key");
+                }
                 self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
-                println!(
-                    "{:016b} is:{:05} was:{:05}[{:016b}] id[{i:02}]{:016b} : {state}",
-                    raw_button_as_flags,
-                    is_pressed,
-                    was_pressed,
-                    self.tablet_last_raw_pressed_buttons,
-                    id_as_binary_mask
-                );
             }
         };
     }
@@ -262,14 +260,21 @@ impl DeviceDispatcher {
             resolution: 1,
         };
 
-        let mut vd = VirtualDeviceBuilder::new("virtual_keyboard");
+        let mut vd =
+            VirtualDeviceBuilder::new("virtual_keyboard").expect("Error creating virtual pen");
 
-        vd.enable_keys(&pen_emitted_keys)
+        vd.enable_keys(pen_emitted_keys)
+            .expect("Error enabling keys for virtual pen.")
             .enable_keys(&[EV_KEY::BTN_TOOL_PEN])
+            .expect("Error enabling keys for virtual pen.")
             .enable_abs(EV_ABS::ABS_X, abs_info_x)
+            .expect("Error enabling X axis for pen")
             .enable_abs(EV_ABS::ABS_Y, abs_info_y)
+            .expect("Error enabling Y axis for pen")
             .enable_abs(EV_ABS::ABS_PRESSURE, abs_info_pressure)
+            .expect("Error enabling pressure for pen")
             .build()
+            .expect("Error building virtual pen")
     }
 
     fn emit_pen_events(&mut self, raw_data: &RawDataReader) {
@@ -283,7 +288,7 @@ impl DeviceDispatcher {
             normalized_pressure,
         );
 
-        // self.pen_emit_touch(raw_data);
+        self.pen_emit_touch(raw_data);
     }
 
     fn normalize_pressure(raw_pressure: i32) -> i32 {
@@ -294,23 +299,43 @@ impl DeviceDispatcher {
     }
 
     fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: i32, y_axis: i32, pressure: i32) {
-        self.virtual_pen
-            .emit(EventCode::EV_ABS(EV_ABS::ABS_X), x_axis);
-        self.virtual_pen
-            .emit(EventCode::EV_ABS(EV_ABS::ABS_Y), y_axis);
-        self.virtual_pen
-            .emit(EventCode::EV_ABS(EV_ABS::ABS_PRESSURE), pressure);
+        if self
+            .virtual_pen
+            .emit(EventCode::EV_ABS(EV_ABS::ABS_X), x_axis)
+            .is_err()
+        {
+            println!("Error emmitting X value");
+        }
+        if self
+            .virtual_pen
+            .emit(EventCode::EV_ABS(EV_ABS::ABS_Y), y_axis)
+            .is_err()
+        {
+            println!("Error emmitting Y value");
+        }
+        if self
+            .virtual_pen
+            .emit(EventCode::EV_ABS(EV_ABS::ABS_PRESSURE), pressure)
+            .is_err()
+        {
+            println!("Error emmitting Pressure value");
+        }
     }
 
     fn pen_emit_touch(&mut self, raw_data: &RawDataReader) {
         let is_touching = Self::normalize_pressure(raw_data.pressure()) > 0;
         if let Some(state) = match (self.was_touching, is_touching) {
-            (false, true) => Some(Self::PRESSED), //Pressed
+            (false, true) => Some(Self::PRESSED),  //Pressed
             (true, false) => Some(Self::RELEASED), //Released
             _ => None,
         } {
-            self.virtual_pen
-                .emit(EventCode::EV_KEY(EV_KEY::BTN_TOUCH), state);
+            if self
+                .virtual_pen
+                .emit(EventCode::EV_KEY(EV_KEY::BTN_TOUCH), state)
+                .is_err()
+            {
+                println!("Error emmitting Touch state");
+            }
         }
         self.was_touching = is_touching;
     }

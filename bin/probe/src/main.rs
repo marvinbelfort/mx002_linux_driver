@@ -84,7 +84,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                     print!("{:02x} ", byte);
                     counter += 1;
                     if counter == 16 {
-                        println!("");
                         counter = 0;
                     }
                 }
