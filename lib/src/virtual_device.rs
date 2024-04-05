@@ -73,7 +73,7 @@ impl VirtualDevice {
     }
 
     pub fn syn(&self) -> Result<(), std::io::Error> {
-        self.emit(EventCode::EV_SYN(EV_SYN::SYN_REPORT), 0)?;
+        self.emit(EventCode::EV_SYN(EV_SYN::SYN_REPORT), 1)?;
         Ok(())
     }
 
@@ -262,6 +262,7 @@ impl DeviceDispatcher {
         } {
             if let Some(&key) = self.map_tablet_button_id_to_emitted_key.get(&i) {
                 self.virtual_keyboard.emit(EventCode::EV_KEY(key), state);
+                self.virtual_keyboard.syn();
                 self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
                 println!(
                     "{:016b} is:{:05} was:{:05}[{:016b}] id[{i:02}]{:016b} : {state}",
