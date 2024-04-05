@@ -121,9 +121,9 @@ impl VirtualDeviceBuilder {
 
 pub struct DeviceDispatcher {
     tablet_last_raw_pressed_buttons: u16,
-    pen_last_raw_pressed_buttons: u8,
-    map_tablet_button_id_to_emitted_key: HashMap<u8, EV_KEY>,
-    map_pen_button_id_to_emitted_key: HashMap<u8, EV_KEY>,
+    pen_last_raw_pressed_button: u8,
+    tablet_button_id_to_key_code_map: HashMap<u8, Vec<EV_KEY>>,
+    pen_button_id_to_key_code_map: HashMap<u8, Vec<EV_KEY>>,
     virtual_pen: VirtualDevice,
     virtual_keyboard: VirtualDevice,
     was_touching: bool,
@@ -141,38 +141,53 @@ impl DeviceDispatcher {
     const HOLD: i32 = 2;
 
     pub fn new() -> Self {
-        let tablet_buttons_ids: Vec<u8> = (0..14).filter(|i| ![10, 11].contains(i)).collect();
-        let mut default_tablet_emitted_keys: Vec<EV_KEY> = vec![
-            EV_KEY::KEY_TAB,
-            EV_KEY::KEY_SPACE,
-            EV_KEY::KEY_LEFTALT,
-            EV_KEY::KEY_LEFTCTRL,
-            EV_KEY::KEY_SCROLLDOWN,
-            EV_KEY::KEY_SCROLLUP,
-            EV_KEY::KEY_LEFTBRACE,
-            EV_KEY::KEY_KPMINUS,
-            EV_KEY::KEY_KPPLUS,
-            EV_KEY::KEY_E,
-            EV_KEY::KEY_B,
-            EV_KEY::KEY_RIGHTBRACE,
-        ];
+        let default_tablet_button_id_to_key_code_map: HashMap<u8, Vec<EV_KEY>> = [
+            (0, vec![EV_KEY::KEY_TAB]),
+            (1, vec![EV_KEY::KEY_SPACE]),
+            (2, vec![EV_KEY::KEY_LEFTALT]),
+            (3, vec![EV_KEY::KEY_LEFTCTRL]),
+            (4, vec![EV_KEY::KEY_SCROLLDOWN]),
+            (5, vec![EV_KEY::KEY_SCROLLUP]),
+            (6, vec![EV_KEY::KEY_LEFTBRACE]),
+            (7, vec![EV_KEY::KEY_LEFTCTRL, EV_KEY::KEY_KPMINUS]),
+            (8, vec![EV_KEY::KEY_KPPLUS]),
+            (9, vec![EV_KEY::KEY_E]),
+            //10 This code is not emitted by physical device
+            //11 This code is not emitted by physical device
+            (12, vec![EV_KEY::KEY_B]),
+            (13, vec![EV_KEY::KEY_RIGHTBRACE]),
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
-        let pen_buttons_ids: Vec<u8> = vec![4, 6];
-        let default_pen_emitted_keys: Vec<EV_KEY> = vec![EV_KEY::BTN_STYLUS, EV_KEY::BTN_STYLUS2];
+        let default_pen_button_id_to_key_code_map: HashMap<u8, Vec<EV_KEY>> = [
+            (4, vec![EV_KEY::BTN_STYLUS]),
+            (6, vec![EV_KEY::BTN_STYLUS2]),
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
         DeviceDispatcher {
             tablet_last_raw_pressed_buttons: 0xFFFF,
-            pen_last_raw_pressed_buttons: 0,
-            map_tablet_button_id_to_emitted_key: tablet_buttons_ids
-                .into_iter()
-                .zip(default_tablet_emitted_keys.clone())
-                .collect(),
-            map_pen_button_id_to_emitted_key: pen_buttons_ids
-                .into_iter()
-                .zip(default_pen_emitted_keys.clone())
-                .collect(),
-            virtual_pen: Self::virtual_pen_builder(&default_pen_emitted_keys),
-            virtual_keyboard: Self::virtual_keyboard_builder(&mut default_tablet_emitted_keys),
+            pen_last_raw_pressed_button: 0,
+            tablet_button_id_to_key_code_map: default_tablet_button_id_to_key_code_map.clone(),
+            pen_button_id_to_key_code_map: default_pen_button_id_to_key_code_map.clone(),
+            virtual_pen: Self::virtual_pen_builder(
+                &default_pen_button_id_to_key_code_map
+                    .values()
+                    .flatten()
+                    .cloned()
+                    .collect::<Vec<EV_KEY>>(),
+            ),
+            virtual_keyboard: Self::virtual_keyboard_builder(
+                &default_tablet_button_id_to_key_code_map
+                    .values()
+                    .flatten()
+                    .cloned()
+                    .collect::<Vec<EV_KEY>>(),
+            ),
             was_touching: false,
         }
     }
@@ -194,7 +209,7 @@ impl DeviceDispatcher {
         self.tablet_last_raw_pressed_buttons = raw_button_as_binary_flags;
     }
 
-    fn virtual_keyboard_builder(tablet_emitted_keys: &mut [EV_KEY]) -> VirtualDevice {
+    fn virtual_keyboard_builder(tablet_emitted_keys: &[EV_KEY]) -> VirtualDevice {
         let mut vd = VirtualDeviceBuilder::new("virtual_keyboard")
             .expect("Error initializig virtual keyboard.");
         vd.enable_keys(tablet_emitted_keys)
@@ -219,14 +234,19 @@ impl DeviceDispatcher {
             (true, false) => Some(Self::RELEASED),
             _ => None,
         } {
-            if let Some(&key) = self.map_tablet_button_id_to_emitted_key.get(&i) {
-                if self
-                    .virtual_keyboard
-                    .emit(EventCode::EV_KEY(key), state)
-                    .is_err()
-                {
-                    println!("Error emitting vitual keyboard key.");
+            if let Some(keys) = self.tablet_button_id_to_key_code_map.get(&i) {
+                for &key in keys {
+                    if self
+                        .virtual_keyboard
+                        .emit(EventCode::EV_KEY(key), state)
+                        .is_err()
+                    {
+                        println!("Error emitting vitual keyboard key.");
+                    }
                 }
+                if self.virtual_keyboard.syn().is_err(){
+                    println!("Error emitting SYN.");
+                };
                 self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
             }
         };
@@ -279,7 +299,7 @@ impl DeviceDispatcher {
     fn emit_pen_events(&mut self, raw_data: &RawDataReader) {
         let raw_pen_buttons = raw_data.pen_buttons();
         self.raw_pen_buttons_to_pen_key_events(raw_pen_buttons);
-        self.pen_last_raw_pressed_buttons = raw_pen_buttons;
+        self.pen_last_raw_pressed_button = raw_pen_buttons;
         let normalized_pressure = Self::normalize_pressure(raw_data.pressure());
         self.raw_pen_abs_to_pen_abs_events(
             raw_data.x_axis(),
@@ -339,20 +359,22 @@ impl DeviceDispatcher {
         self.was_touching = is_touching;
     }
 
-    fn raw_pen_buttons_to_pen_key_events(&mut self, pen_buttons: u8) {
-        if let Some((state, id)) = match (self.pen_last_raw_pressed_buttons, pen_buttons) {
+    fn raw_pen_buttons_to_pen_key_events(&mut self, pen_button: u8) {
+        if let Some((state, id)) = match (self.pen_last_raw_pressed_button, pen_button) {
             (2, x) if x == 6 || x == 4 => Some((Self::PRESSED, x)),
             (x, 2) if x == 6 || x == 4 => Some((Self::RELEASED, x)),
             (x, y) if x != 2 && x == y => Some((Self::HOLD, x)),
             _ => None,
         } {
-            let emit_key = self
-                .map_pen_button_id_to_emitted_key
+            let keys = self
+                .pen_button_id_to_key_code_map
                 .get(&id)
                 .expect("Error mapping pen keys.");
-            self.virtual_pen
-                .emit(EventCode::EV_KEY(*emit_key), state)
-                .expect("Erro emitting key for pen.")
+            for key in keys {
+                self.virtual_pen
+                    .emit(EventCode::EV_KEY(*key), state)
+                    .expect("Erro emitting key for pen.")
+            }
         }
     }
 }
