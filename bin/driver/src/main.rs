@@ -25,7 +25,7 @@ fn main() {
             {
                 device_dispatcher.dispatch(&data_reader);
                 if device_dispatcher.syn().is_err() {
-                    println!("Error emitting SYN");
+                    println!("Error emitting SYN.");
                 }
             }
         }
@@ -43,4 +43,6 @@ fn main_loop(mut f: impl FnMut()) {
     while !flag.load(Ordering::Relaxed) {
         f();
     }
+    println!();
+    println!("The driver has exited.")
 }

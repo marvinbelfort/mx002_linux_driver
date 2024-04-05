@@ -98,7 +98,7 @@ impl VirtualDeviceBuilder {
     pub fn enable_keys(&mut self, keys: &[EV_KEY]) -> Result<&mut Self, Error> {
         for &key in keys {
             if self.uninit_device.enable(EventCode::EV_KEY(key)).is_err() {
-                println!("Error enabling key");
+                println!("Error enabling key.");
             }
         }
         Ok(self)
@@ -129,7 +129,7 @@ pub struct DeviceDispatcher {
     was_touching: bool,
 }
 
-impl Default for DeviceDispatcher{
+impl Default for DeviceDispatcher {
     fn default() -> Self {
         Self::new()
     }
@@ -196,11 +196,11 @@ impl DeviceDispatcher {
 
     fn virtual_keyboard_builder(tablet_emitted_keys: &mut [EV_KEY]) -> VirtualDevice {
         let mut vd = VirtualDeviceBuilder::new("virtual_keyboard")
-            .expect("Error initializig Virtual keyboard");
+            .expect("Error initializig virtual keyboard.");
         vd.enable_keys(tablet_emitted_keys)
-            .expect("Error enablig keys for virtual keyboard")
+            .expect("Error enablig keys for virtual keyboard.")
             .build()
-            .expect("Error creating virtual keyboard")
+            .expect("Error creating virtual keyboard.")
     }
 
     fn binary_flags_to_tablet_key_events(&mut self, raw_button_as_flags: u16) {
@@ -225,7 +225,7 @@ impl DeviceDispatcher {
                     .emit(EventCode::EV_KEY(key), state)
                     .is_err()
                 {
-                    println!("Error emitting vitual tablet key");
+                    println!("Error emitting vitual keyboard key.");
                 }
                 self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
             }
@@ -260,21 +260,20 @@ impl DeviceDispatcher {
             resolution: 1,
         };
 
-        let mut vd =
-            VirtualDeviceBuilder::new("virtual_keyboard").expect("Error creating virtual pen");
+        let mut vd = VirtualDeviceBuilder::new("virtual_pen").expect("Error creating virtual pen.");
 
         vd.enable_keys(pen_emitted_keys)
             .expect("Error enabling keys for virtual pen.")
             .enable_keys(&[EV_KEY::BTN_TOOL_PEN])
             .expect("Error enabling keys for virtual pen.")
             .enable_abs(EV_ABS::ABS_X, abs_info_x)
-            .expect("Error enabling X axis for pen")
+            .expect("Error enabling X axis for pen.")
             .enable_abs(EV_ABS::ABS_Y, abs_info_y)
-            .expect("Error enabling Y axis for pen")
+            .expect("Error enabling Y axis for pen.")
             .enable_abs(EV_ABS::ABS_PRESSURE, abs_info_pressure)
-            .expect("Error enabling pressure for pen")
+            .expect("Error enabling pressure for pen.")
             .build()
-            .expect("Error building virtual pen")
+            .expect("Error building virtual pen.")
     }
 
     fn emit_pen_events(&mut self, raw_data: &RawDataReader) {
@@ -304,29 +303,29 @@ impl DeviceDispatcher {
             .emit(EventCode::EV_ABS(EV_ABS::ABS_X), x_axis)
             .is_err()
         {
-            println!("Error emmitting X value");
+            println!("Error emmitting X value.");
         }
         if self
             .virtual_pen
             .emit(EventCode::EV_ABS(EV_ABS::ABS_Y), y_axis)
             .is_err()
         {
-            println!("Error emmitting Y value");
+            println!("Error emmitting Y value.");
         }
         if self
             .virtual_pen
             .emit(EventCode::EV_ABS(EV_ABS::ABS_PRESSURE), pressure)
             .is_err()
         {
-            println!("Error emmitting Pressure value");
+            println!("Error emmitting Pressure value.");
         }
     }
 
     fn pen_emit_touch(&mut self, raw_data: &RawDataReader) {
         let is_touching = Self::normalize_pressure(raw_data.pressure()) > 0;
         if let Some(state) = match (self.was_touching, is_touching) {
-            (false, true) => Some(Self::PRESSED),  //Pressed
-            (true, false) => Some(Self::RELEASED), //Released
+            (false, true) => Some(Self::PRESSED),
+            (true, false) => Some(Self::RELEASED),
             _ => None,
         } {
             if self
@@ -334,7 +333,7 @@ impl DeviceDispatcher {
                 .emit(EventCode::EV_KEY(EV_KEY::BTN_TOUCH), state)
                 .is_err()
             {
-                println!("Error emmitting Touch state");
+                println!("Error emmitting Touch state.");
             }
         }
         self.was_touching = is_touching;
@@ -350,10 +349,10 @@ impl DeviceDispatcher {
             let emit_key = self
                 .map_pen_button_id_to_emitted_key
                 .get(&id)
-                .expect("Error mapping pen keys");
+                .expect("Error mapping pen keys.");
             self.virtual_pen
                 .emit(EventCode::EV_KEY(*emit_key), state)
-                .expect("Erro ...")
+                .expect("Erro emitting key for pen.")
         }
     }
 }
