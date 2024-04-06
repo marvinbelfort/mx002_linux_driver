@@ -42,6 +42,7 @@ impl PhysicalDevice {
                 }
             }
         }
+        self.reset();
         self
     }
 

@@ -114,7 +114,7 @@ impl VirtualDeviceBuilder {
     pub fn build(&mut self) -> Result<VirtualDevice, Error> {
         self.uninit_device
             .enable(EventCode::EV_SYN(EV_SYN::SYN_REPORT))?;
-        let uinput_device = UInputDevice::create_from_device(&self.uninit_device).unwrap();
+        let uinput_device = UInputDevice::create_from_device(&self.uninit_device)?;
         Ok(VirtualDevice { uinput_device })
     }
 }
@@ -244,7 +244,7 @@ impl DeviceDispatcher {
                         println!("Error emitting vitual keyboard key.");
                     }
                 }
-                if self.virtual_keyboard.syn().is_err(){
+                if self.virtual_keyboard.syn().is_err() {
                     println!("Error emitting SYN.");
                 };
                 self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
@@ -373,7 +373,8 @@ impl DeviceDispatcher {
             for key in keys {
                 self.virtual_pen
                     .emit(EventCode::EV_KEY(*key), state)
-                    .expect("Erro emitting key for pen.")
+                    .expect("Erro emitting key for pen.");
+                println!("{}", state);
             }
         }
     }

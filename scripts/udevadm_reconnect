@@ -1,3 +1,0 @@
-#!/bin/bash
-udevadm test --port=/dev/bus/usb/$1/$2 --action=remove
-udevadm test --port=/dev/bus/usb/$1/$2 --action=add

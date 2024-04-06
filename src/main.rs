@@ -1,11 +1,14 @@
+mod virtual_device;
+mod physical_device;
+
 use signal_hook::consts::signal::*;
 use signal_hook::flag::register;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::u16;
 
-use mx002_lib::physical_device::PhysicalDevice;
-use mx002_lib::virtual_device::{DeviceDispatcher, RawDataReader};
+use physical_device::PhysicalDevice;
+use virtual_device::{DeviceDispatcher, RawDataReader};
 
 const VID: u16 = 0x08f2;
 const PID: u16 = 0x6811;
