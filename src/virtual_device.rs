@@ -232,6 +232,7 @@ impl DeviceDispatcher {
         if let Some(state) = match (was_pressed, is_pressed) {
             (false, true) => Some(Self::PRESSED),
             (true, false) => Some(Self::RELEASED),
+            (true, true) => Some(Self::HOLD),
             _ => None,
         } {
             if let Some(keys) = self.tablet_button_id_to_key_code_map.get(&i) {
@@ -247,7 +248,6 @@ impl DeviceDispatcher {
                 if self.virtual_keyboard.syn().is_err() {
                     println!("Error emitting SYN.");
                 };
-                self.tablet_last_raw_pressed_buttons = raw_button_as_flags;
             }
         };
     }
