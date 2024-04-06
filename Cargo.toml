@@ -8,4 +8,6 @@ evdev-rs = { version = "0.6.1", features = ["libevdev-1-10"] }
 rusb = "0.9.3"
 signal-hook = "0.3.17"
 
+[profile.release]
+opt-level = 0 # seems to be a bug of evdev-rs
 
