@@ -274,7 +274,7 @@ impl DeviceDispatcher {
         let abs_info_pressure = AbsInfo {
             value: 0,
             minimum: 0,
-            maximum: 1024,
+            maximum: 600,
             fuzz: 0,
             flat: 0,
             resolution: 1,
