@@ -4,10 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-evdev-rs = { version = "0.6.1", features = ["libevdev-1-10"] }
+evdev = "0.12.1"
 rusb = "0.9.3"
 signal-hook = "0.3.17"
 
 [profile.release]
-opt-level = 0 # seems to be a bug of evdev-rs
-
+strip = true
+lto = true
+panic = "abort"
