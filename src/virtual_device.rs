@@ -60,76 +60,6 @@ impl RawDataReader {
     }
 }
 
-/* pub struct VirtualDeviceWrapper {
-    uinput_device: UInputDevice,
-}
-
-impl VirtualDeviceWrapper {
-    pub fn emit(&self, event_code: EventCode, value: i32) -> Result<(), Error> {
-        self.uinput_device.write_event(&InputEvent {
-            time: TimeVal {
-                tv_sec: 0,
-                tv_usec: 0,
-            },
-            event_code,
-            value,
-        })?;
-        Ok(())
-    }
-
-    pub fn syn(&self) -> Result<(), Error> {
-        self.emit(EventCode::EV_SYN(EV_SYN::SYN_REPORT), 0)?;
-        Ok(())
-    }
-} */
-
-/* pub struct VirtualDeviceBuilder {
-    uninit_device: UninitDevice,
-}
-
-impl VirtualDeviceBuilder {
-    pub fn new(name: &str) -> Option<Self> {
-        if let Some(uninit_device) = UninitDevice::new() {
-            uninit_device.set_name(name);
-            return Some(VirtualDeviceBuilder { uninit_device });
-        };
-        None
-    }
-
-    pub fn enable_pointer(&mut self) -> Result<&mut Self, Error> {
-        if self
-            .uninit_device
-            .enable(InputProp::INPUT_PROP_POINTER)
-            .is_err()
-        {
-            println!("Error enabling device as Pointer.");
-        }
-        Ok(self)
-    }
-
-    pub fn enable_keys(&mut self, keys: &[Key]) -> Result<&mut Self, Error> {
-        for &key in keys {
-            if self.uninit_device.enable(EventCode::Key(key)).is_err() {
-                println!("Error enabling key.");
-            }
-        }
-        Ok(self)
-    }
-
-    pub fn enable_abs(&mut self, ev_abs: EV_ABS, abs_info: AbsInfo) -> Result<&mut Self, Error> {
-        let enabled_code_data_x = EnableCodeData::AbsInfo(abs_info);
-        self.uninit_device
-            .enable_event_code(&EventCode::EV_ABS(ev_abs), Some(enabled_code_data_x))?;
-        Ok(self)
-    }
-
-    pub fn build(&mut self) -> Result<VirtualDeviceWrapper, Error> {
-        self.uninit_device
-            .enable(EventCode::EV_SYN(EV_SYN::SYN_REPORT))?;
-        let uinput_device = UInputDevice::create_from_device(&self.uninit_device)?;
-        Ok(VirtualDeviceWrapper { uinput_device })
-    }
-} */
 
 pub struct DeviceDispatcher {
     tablet_last_raw_pressed_buttons: u16,
@@ -296,7 +226,7 @@ impl DeviceDispatcher {
         }
 
         VirtualDeviceBuilder::new()?
-            .name("virtual_tablet")
+            .name("virtual_tablet_pen")
             .with_absolute_axis(&abs_x_setup)?
             .with_absolute_axis(&abs_y_setup)?
             .with_absolute_axis(&abs_pressure_setup)?
@@ -329,18 +259,18 @@ impl DeviceDispatcher {
         self.virtual_pen.emit(&[InputEvent::new(
             EventType::ABSOLUTE,
             AbsoluteAxisType::ABS_X.0,
-            x_axis as i32,
-        )]);
+            x_axis,
+        )]).expect("Error emitting ABS_X.");
         self.virtual_pen.emit(&[InputEvent::new(
             EventType::ABSOLUTE,
             AbsoluteAxisType::ABS_Y.0,
-            y_axis as i32,
-        )]);
+            y_axis,
+        )]).expect("Error emitting ABS_Y.");
         self.virtual_pen.emit(&[InputEvent::new(
             EventType::ABSOLUTE,
             AbsoluteAxisType::ABS_PRESSURE.0,
-            pressure as i32,
-        )]);
+            pressure,
+        )]).expect("Error emitting Pressure.");
     }
 
     fn pen_emit_touch(&mut self, raw_data: &RawDataReader) {
@@ -354,7 +284,7 @@ impl DeviceDispatcher {
                 EventType::KEY,
                 Key::BTN_TOUCH.code(),
                 state,
-            )]);
+            )]).expect("Error emitting Touch");
         }
         self.was_touching = is_touching;
     }

@@ -28,9 +28,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.90"
+version = "1.0.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cd6604a82acf3039f1144f54b8eb34e91ffba622051189e71b781822d5ee1f5"
+checksum = "2678b2e3449475e95b0aa6f9b506a28e61b3dc8996592b983695e8ebb58a8b41"
 
 [[package]]
 name = "cfg-if"
@@ -167,15 +167,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-<<<<<<< Updated upstream
-version = "2.0.55"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "002a1b3dbf967edfafc32655d0f377ab0bb7b994aa1d32c8cc7e9b8bf3ebb8f0"
-=======
 version = "2.0.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44cfb93f38070beee36b3fef7d4f5a16f27751d94b187b666a5cc5e9b0d30687"
->>>>>>> Stashed changes
 dependencies = [
  "proc-macro2",
  "quote",
