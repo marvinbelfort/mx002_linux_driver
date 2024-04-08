@@ -31,7 +31,7 @@ Bus 001 Device 005: ID 08f2:6811 Gotop Information Inc. [T501] Driver Inside Tab
 
 ## Installation
 
-To build and install the driver, follow these steps:
+To build and run the driver, follow these steps:
 
 ```bash
 git clone git@github.com:marvinbelfort/mx002_linux_driver.git
@@ -48,7 +48,7 @@ To run the driver, you have two options:
 1. **Run as Root:**
 
    ```bash
-   sudo ./target/release/mx002
+   sudo ./mx002
    ```
 
 2. **Create a udev Rule:**
@@ -101,8 +101,9 @@ xinput map-to-output 10 "DP-2"
 
 - Enable more direct configuration of emitted key combinations.
 - Implement mapping of the tablet area vs. multiple monitors.
+- Exhaust the SET REPORT HID protoco combinations to determine if any of them enable the advertised pressure of 8192. (but I really suspect that's all there is to it.)
 
-## References
+"## References
 
 - [Tool that enables expanded mode for the tablet, by DigiMend](https://github.com/DIGImend/10moons-tools)
 - [Learning about the possibility of creating user-space drivers](https://github.com/alex-s-v/10moons-driver)
