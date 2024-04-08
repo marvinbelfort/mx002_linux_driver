@@ -92,7 +92,7 @@ impl DeviceDispatcher {
             (5, vec![Key::KEY_SCROLLUP]),
             (6, vec![Key::KEY_LEFTBRACE]),
             (7, vec![Key::KEY_LEFTCTRL, Key::KEY_KPMINUS]),
-            (8, vec![Key::KEY_KPPLUS]),
+            (8, vec![Key::KEY_LEFTCTRL, Key::KEY_KPPLUS]),
             (9, vec![Key::KEY_E]),
             //10 This code is not emitted by physical device
             //11 This code is not emitted by physical device
