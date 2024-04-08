@@ -102,6 +102,7 @@ xinput map-to-output 10 "DP-2"
 - Enable more direct configuration of emitted key combinations.
 - Implement mapping of the tablet area vs. multiple monitors.
 - Exhaust the SET REPORT HID protocol combinations to determine if any of them enable the advertised pressure of 8192. (but I really suspect that's all there is to it.)
+- Add support for the 10 virtual buttons.
 
 "## References
 
