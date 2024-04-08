@@ -20,6 +20,7 @@ fn main() {
     let mut data_reader = RawDataReader::new();
     let mut device_dispatcher = DeviceDispatcher::new();
 
+    println!("The driver is running.");
     main_loop({
         || {
             if physical_device
