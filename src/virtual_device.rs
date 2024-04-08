@@ -226,7 +226,7 @@ impl DeviceDispatcher {
         }
 
         VirtualDeviceBuilder::new()?
-            .name("virtual_tablet_pen")
+            .name("virtual_tablet")
             .with_absolute_axis(&abs_x_setup)?
             .with_absolute_axis(&abs_y_setup)?
             .with_absolute_axis(&abs_pressure_setup)?

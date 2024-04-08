@@ -56,12 +56,46 @@ To run the driver, you have two options:
    For Arch Linux (this may vary by distribution):
 
    ```bash
-   echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="08f2", ATTRS{idProduct}=="6811", TAG+="uaccess"' > /etc/udev/rules.d/75-mx002.rules
+   echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="08f2", ATTRS{idProduct}=="6811", TAG+="uaccess"' > /etc/udev/rules.d/99-mx002.rules
    sudo udevadm control --reload-rules
    sudo udevadm trigger
    ```
 
    This allows any user to run the driver without needing sudo.
+
+## Multiple Monitors:
+
+Show input devices with:
+```bash
+xinput
+
+⎡ Virtual core pointer                    	id=2	[master pointer  (3)]
+... 
+⎜   ↳ virtual_tablet Pen (0)                  	id=10	[slave  pointer  (2)]
+⎣ Virtual core keyboard                   	id=3	[master keyboard (2)]
+...
+    ↳ virtual_tablet                          	id=8	[slave  keyboard (3)]
+    ↳ virtual_tablet                          	id=9	[slave  keyboard (3)]
+```
+
+If you can't see the entry "virtual_tablet Pen", move the pen a bit and run the command again.
+Remember it's id (10 in the example)
+
+List existing monitors:
+```
+xrandr | rg '\bconnected\b'
+
+HDMI-0 connected primary 2560x1080+0+0 (normal left inverted right x axis y axis) 673mm x 284mm
+DP-2 connected 1680x1050+2560+84 (normal left inverted right x axis y axis) 473mm x 296mm
+```
+
+So, to map the pen's movement only to monitor 2, use:
+
+```bash
+xinput map-to-output 10 "DP-2"
+```
+
+
 
 ## TODOs
 
