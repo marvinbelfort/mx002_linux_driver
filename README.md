@@ -104,7 +104,7 @@ xinput map-to-output 10 "DP-2"
 - Exhaust the SET REPORT HID protocol combinations to determine if any of them enable the advertised pressure of 8192. (but I really suspect that's all there is to it.)
 - Add support for the 10 virtual buttons.
 
-"## References
+## References
 
 - [Tool that enables expanded mode for the tablet, by DigiMend](https://github.com/DIGImend/10moons-tools)
 - [Learning about the possibility of creating user-space drivers](https://github.com/alex-s-v/10moons-driver)
