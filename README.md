@@ -31,7 +31,7 @@ Bus 001 Device 005: ID 08f2:6811 Gotop Information Inc. [T501] Driver Inside Tab
 
 ## Installation
 
-To build and run the driver, follow these steps:
+To build and run the driver, follow these steps:  
 [You will need rust installed](https://wiki.archlinux.org/title/rust)
 
 ```bash
