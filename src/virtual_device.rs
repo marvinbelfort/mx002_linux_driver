@@ -7,6 +7,10 @@ use evdev::{
     UinputAbsSetup,
 };
 
+use crate::config::{PEN_THRESHOLD, PEN_STRENGTH_SCALING};
+use std::sync::atomic::Ordering;
+
+
 #[derive(Default)]
 pub struct RawDataReader {
     pub data: Vec<u8>,
@@ -121,7 +125,7 @@ impl DeviceDispatcher {
                     .cloned()
                     .collect::<Vec<Key>>(),
             )
-            .expect("Error building virtual pen"),
+            .expect("mx002-driver-err:Error building virtual pen"),
             virtual_keyboard: Self::virtual_keyboard_builder(
                 &default_tablet_button_id_to_key_code_map
                     .values()
@@ -129,7 +133,7 @@ impl DeviceDispatcher {
                     .cloned()
                     .collect::<Vec<Key>>(),
             )
-            .expect("Error building virtual keyborad"),
+            .expect("mx002-driver-err:Error building virtual keyboard"),
             was_touching: false,
         }
     }
@@ -192,7 +196,7 @@ impl DeviceDispatcher {
                 for &key in keys {
                     self.virtual_keyboard
                         .emit(&[InputEvent::new(EventType::KEY, key.code(), state)])
-                        .expect("Error emitting vitual keyboard key.");
+                        .expect("mx002-driver-err:Error emitting vitual keyboard key.");
                 }
 
                 self.virtual_keyboard
@@ -201,7 +205,7 @@ impl DeviceDispatcher {
                         Synchronization::SYN_REPORT.0,
                         0,
                     )])
-                    .expect("Error emitting SYN.");
+                    .expect("mx002-driver-err:Error emitting SYN.");
             }
         };
     }
@@ -247,13 +251,17 @@ impl DeviceDispatcher {
 
         self.pen_emit_touch(raw_data);
     }
+
+
+    // netoe1-modify:
     fn normalize_pressure(raw_pressure: i32) -> i32 {
-        let proximity_threshold = 600; // Adjust for proximity sensitivity
-        let strength_scaling = 2; // Adjust for strength of the press
+        // let proximity_threshold = 600;      // Adjust for proximity sensitivity
+        // let strength_scaling = 2;           // Adjust for strength of the press
+    
     
         match 1740 - raw_pressure {
-            x if x <= proximity_threshold => 0,
-            x => x * strength_scaling, // Scale the pressure for stronger presses
+            x if x <= PEN_THRESHOLD.load(Ordering::Relaxed)=> 0,
+            x => x * PEN_STRENGTH_SCALING.load(Ordering::Relaxed), // Scale the pressure for stronger presses
         }
     }
 
@@ -262,17 +270,17 @@ impl DeviceDispatcher {
             EventType::ABSOLUTE,
             AbsoluteAxisType::ABS_X.0,
             x_axis,
-        )]).expect("Error emitting ABS_X.");
+        )]).expect("mx002-driver-err:Error emitting ABS_X.");
         self.virtual_pen.emit(&[InputEvent::new(
             EventType::ABSOLUTE,
             AbsoluteAxisType::ABS_Y.0,
             y_axis,
-        )]).expect("Error emitting ABS_Y.");
+        )]).expect("mx002-driver-err:Error emitting ABS_Y.");
         self.virtual_pen.emit(&[InputEvent::new(
             EventType::ABSOLUTE,
             AbsoluteAxisType::ABS_PRESSURE.0,
             pressure,
-        )]).expect("Error emitting Pressure.");
+        )]).expect("mx002-driver-err:Error emitting Pressure.");
     }
 
     fn pen_emit_touch(&mut self, raw_data: &RawDataReader) {
@@ -286,7 +294,7 @@ impl DeviceDispatcher {
                 EventType::KEY,
                 Key::BTN_TOUCH.code(),
                 state,
-            )]).expect("Error emitting Touch");
+            )]).expect("mx002-driver-err:Error emitting Touch");
         }
         self.was_touching = is_touching;
     }
@@ -301,11 +309,11 @@ impl DeviceDispatcher {
             let keys = self
                 .pen_button_id_to_key_code_map
                 .get(&id)
-                .expect("Error mapping pen keys.");
+                .expect("mx002-driver-err:Error mapping pen keys.");
             for key in keys {
                 self.virtual_pen
                     .emit(&[InputEvent::new(EventType::KEY, key.code(), state)])
-                    .expect("Error emitting pen keys.")
+                    .expect("mx002-driver-err:Error emitting pen keys.")
             }
         }
     }
