@@ -248,13 +248,13 @@ impl DeviceDispatcher {
         self.pen_emit_touch(raw_data);
     }
     fn normalize_pressure(raw_pressure: i32) -> i32 {
-        let proximity_threshold = 600; // Adjust for proximity sensitivity
-        let strength_scaling = 2; // Adjust for strength of the press
-    
-        match 1740 - raw_pressure {
-            x if x <= proximity_threshold => 0,
-            x => x * strength_scaling, // Scale the pressure for stronger presses
+        let diff = 1740 - raw_pressure;
+
+        if diff < 300 {
+            return 0;
         }
+
+        diff
     }
 
     fn raw_pen_abs_to_pen_abs_events(&mut self, x_axis: i32, y_axis: i32, pressure: i32) {
